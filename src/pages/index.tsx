@@ -26,7 +26,7 @@ const HomePage = ({ data }: ResumePageProps) => {
     return (
         <>
             <Head>
-                <title>이력서</title>
+                <title>{data.resumeBase.userNm} 이력서</title>
                 <meta name="description" content="이력서" />
             </Head>
 
