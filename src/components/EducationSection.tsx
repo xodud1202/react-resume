@@ -22,7 +22,7 @@ const EducationSection = ({resumeEducationList}: EducationSectionProps) => {
             <h2 className="pdf-section-title">학력</h2>
             <div className="pdf-education-list">
                 {resumeEducationList?.map((item, idx) => (
-                    <div className="pdf-education flex items-start gap-4" key={idx}>
+                    <div className="pdf-education flex items-center gap-4" key={idx}>
                         {item?.logoPath && (
                             <div className="shrink-0 relative w-[35px] h-[35px] flex justify-center items-center overflow-hidden">
                                 <Image className="object-contain" fill src={item.logoPath.trim()} alt="학교로고" />
@@ -33,9 +33,9 @@ const EducationSection = ({resumeEducationList}: EducationSectionProps) => {
                                 <h3 className="pdf-school-name">{item.educationNm}</h3>
                                 <p className="pdf-education-period">{item.educationStartDt} - {item?.educationEndDt} ({item.educationStat})</p>
                             </div>
-                            <div className="pdf-education-header">
-                                <p className="pdf-education-details">{item.department}</p>
-                                <p className="pdf-education-details">{item.educationScore}</p>
+                            <div className="pdf-education-details flex justify-between">
+                                <p>{item.department}</p>
+                                <p>{item.educationScore}</p>
                             </div>
                         </div>
                     </div>
