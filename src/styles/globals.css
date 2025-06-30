@@ -1,0 +1,313 @@
+@import "tailwindcss";
+
+/* PDF 스타일 정확히 매칭하기 위한 스타일 */
+:root {
+	--pdf-primary: #000000;
+	--pdf-secondary: #444444;
+	--pdf-light-gray: #f8f8f8;
+	--pdf-border: #dddddd;
+	--pdf-accent: #0066cc;
+	--pdf-spacing: 1.2rem;
+	--pdf-font: 'Noto Sans KR', sans-serif;
+}
+
+/* 기본 스타일 */
+body {
+	font-family: var(--pdf-font);
+	color: var(--pdf-primary);
+	line-height: 1.5;
+	background-color: #f0f0f0;
+	margin: 0;
+	padding: 0;
+	-webkit-print-color-adjust: exact;
+	print-color-adjust: exact;
+}
+
+/* PDF 스타일 이력서 컨테이너 */
+.pdf-resume {
+	width: 210mm; /* A4 너비 */
+	min-height: 297mm; /* A4 높이 */
+	margin: 0 auto;
+	padding: 30mm 20mm;
+	background-color: white;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+	position: relative;
+	box-sizing: border-box;
+}
+
+/* 헤더 섹션 */
+.pdf-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	margin-bottom: 2rem;
+}
+
+.pdf-personal-info h1 {
+	font-size: 2.2rem;
+	font-weight: 700;
+	color: var(--pdf-primary);
+	margin: 0;
+	line-height: 1.2;
+	letter-spacing: -0.05em;
+}
+
+.pdf-job-title {
+	font-size: 1.2rem;
+	color: var(--pdf-secondary);
+	font-weight: 500;
+}
+
+.pdf-contact-info {
+	text-align: right;
+}
+
+/* 구분선 */
+.pdf-divider {
+	height: 1px;
+	background-color: var(--pdf-border);
+	margin: 1.5rem 0;
+}
+
+/* 섹션 공통 스타일 */
+.pdf-section {
+	margin-bottom: 1.8rem;
+}
+
+.pdf-experience-section-title {
+	font-size: 0.85rem;
+	margin: 0;
+	font-weight: 300;
+	color: gray;
+	letter-spacing: -0.02em;
+}
+
+.pdf-section-title {
+	font-size: 1.4rem;
+	font-weight: 700;
+	color: var(--pdf-primary);
+	margin: 0 0 1rem 0;
+	letter-spacing: -0.03em;
+}
+
+/* 자기소개 섹션 */
+.pdf-intro p {
+	margin-bottom: 0.8rem;
+	font-size: 0.95rem;
+	line-height: 1.6;
+	color: var(--pdf-primary);
+}
+
+/* 경력사항 섹션 */
+.pdf-company {
+	margin-bottom: 1.5rem;
+}
+
+.pdf-company-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	margin-bottom: 0.8rem;
+}
+
+.pdf-company-name {
+	font-size: 1.4rem;
+	font-weight: 700;
+	color: var(--pdf-primary);
+	margin: 0;
+	letter-spacing: -0.02em;
+}
+
+.pdf-company-period {
+	font-size: 0.85rem;
+	color: var(--pdf-secondary);
+}
+
+.pdf-project-list {
+	list-style: none;
+	padding-left: 0;
+	margin: 0;
+}
+
+.pdf-project {
+	margin-bottom: 1.1rem;
+	padding-left: 1rem;
+	border-left: 2px solid var(--pdf-accent);
+}
+
+.pdf-project-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 0.2rem;
+}
+
+.pdf-project-title {
+	font-weight: 600;
+	margin: 0;
+	font-size: 1.1rem;
+	color: var(--pdf-primary);
+}
+
+.pdf-project-period {
+	font-size: 0.75rem;
+	color: var(--pdf-secondary);
+}
+
+.pdf-project-desc {
+	margin: 0.2rem 0;
+	font-size: 0.9rem;
+}
+
+.pdf-tech-stack {
+	font-size: 0.9rem;
+	font-weight: 500;
+	margin-top: 0.5rem;
+	margin-bottom: 1.0rem;
+}
+
+/* 학력 섹션 */
+.pdf-education {
+	margin-bottom: 0.8rem;
+	padding-left: 1rem;
+	border-left: 2px solid var(--pdf-accent);
+}
+
+.pdf-education-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.pdf-school-name {
+	font-weight: 600;
+	margin: 0;
+	font-size: 1rem;
+	color: var(--pdf-primary);
+}
+
+.education-logo {
+	display: inline-block;
+	margin-right: 0.5rem;
+}
+
+.pdf-education-period {
+	font-size: 0.85rem;
+	color: var(--pdf-secondary);
+}
+
+.pdf-education-details {
+	margin: 0.2rem 0;
+	color: var(--pdf-secondary);
+	font-size: 0.9rem;
+}
+
+/* 보유 기술 섹션 */
+.pdf-skills {
+	display: grid;
+	gap: 1.2rem;
+}
+
+.pdf-skill-category {
+	margin-bottom: 0.8rem;
+}
+
+.pdf-category-title {
+	font-size: 1rem;
+	font-weight: 600;
+	margin-bottom: 0.5rem;
+	color: var(--pdf-primary);
+}
+
+.pdf-skill-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5rem;
+}
+
+.pdf-skill-tag {
+	background-color: var(--pdf-light-gray);
+	color: var(--pdf-accent);
+	padding: 0.2rem 0.6rem;
+	border-radius: 4px;
+	font-size: 0.85rem;
+	font-weight: 500;
+	border: 1px solid #e0e0e0;
+}
+
+/* 기타 경력 및 자격 섹션 */
+.pdf-other-item {
+	margin-bottom: 0.8rem;
+	padding-left: 1rem;
+	border-left: 2px solid var(--pdf-accent);
+}
+
+.pdf-other-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.pdf-other-title {
+	font-weight: 600;
+	margin: 0;
+	font-size: 1rem;
+	color: var(--pdf-primary);
+}
+
+.pdf-other-period {
+	font-size: 0.85rem;
+	color: var(--pdf-secondary);
+}
+
+.pdf-other-position {
+	margin: 0.2rem 0;
+	color: var(--pdf-secondary);
+	font-weight: 500;
+	font-size: 0.9rem;
+}
+
+.pdf-other-desc {
+	margin-top: 0.4rem;
+	font-size: 0.9rem;
+	line-height: 1.6;
+}
+
+/* 링크 스타일 */
+a {
+	color: var(--pdf-accent);
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+/* 인쇄 스타일 */
+@media print {
+	body {
+		background-color: white;
+	}
+
+	.pdf-resume {
+		width: 100%;
+		min-height: auto;
+		margin: 0;
+		padding: 0;
+		box-shadow: none;
+	}
+
+	.pdf-divider {
+		margin: 1rem 0;
+	}
+
+	/* 페이지 나눔 방지 */
+	.pdf-section {
+		page-break-inside: avoid;
+	}
+
+	/* 인쇄 시 링크 URL 표시 제거 */
+	a::after {
+		content: "";
+	}
+}
