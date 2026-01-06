@@ -8,10 +8,65 @@ import EducationSection from "@/components/EducationSection";
 import SkillsSection from "@/components/SkillsSection";
 import OtherInfoSection from "@/components/OtherInfoSection";
 
-import {getResumeInfoServerSideProps, ResumePageProps} from '@/utils/serverSideProps'
 import {useRouter} from "next/router";
+import {GetServerSideProps, GetServerSidePropsContext} from "next";
+import {ResumeBase} from "@/components/HeaderSection";
 
-export const getServerSideProps = getResumeInfoServerSideProps;
+// API 응답 타입 정의
+export interface ResumeResponse {
+    resumeBase: ResumeBase;
+    result?: string;
+    message?: string;
+    resumeIntroduceList?: [];
+    resumeExperienceList?: [];
+    resumeEducationList?: [];
+    resumeOtherExperienceList?: [];
+}
+
+// Props 타입 정의
+export interface ResumePageProps {
+    data: ResumeResponse
+}
+
+export const getServerSideProps: GetServerSideProps<ResumePageProps> = async (
+    ctx: GetServerSidePropsContext
+) => {
+    const { loginId } = ctx.query;
+
+    let data = {} as ResumeResponse;
+    if(!loginId) {
+        return {
+            props: {
+                data
+            },
+        };
+    }
+
+    // 서버 사이드에서 API 호출 시 절대 URL 필요
+    const protocol = ctx.req.headers['x-forwarded-proto'] || 'http';
+    const host = ctx.req.headers.host;
+    const baseUrl = `${protocol}://${host}`;
+
+    const response = await fetch(`${baseUrl}/api/backend-api`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            requestUri: `/api/resume/info?loginId=${loginId}`,
+            requestParam: {loginId, method: 'GET'}
+        })
+    });
+
+    if (response.ok) {
+        data = await response.json();
+    }
+
+    // 반드시 객체 형태로 반환!
+    return {
+        props: {
+            data,
+        }
+    };
+};
 
 const HomePage = ({ data }: ResumePageProps) => {
     const router = useRouter();
