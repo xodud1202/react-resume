@@ -38,14 +38,44 @@ jobs:
 
       - name: 서버 빌드 및 PM2 재시작
         run: |
-          ssh ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }} "bash -lc '
+          ssh ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }} "sudo -i bash -lc '
             set -e
             [ -f ~/.profile ] && . ~/.profile || true
             [ -f ~/.bashrc ] && . ~/.bashrc || true
             [ -s ~/.nvm/nvm.sh ] && . ~/.nvm/nvm.sh || true
-            command -v node >/dev/null 2>&1 || { echo node not found; exit 127; }
-            command -v npm >/dev/null 2>&1 || { echo npm not found; exit 127; }
-            command -v pm2 >/dev/null 2>&1 || { echo pm2 not found; exit 127; }
+
+            if [ -n "${{ secrets.OCI_NODE_BIN }}" ]; then
+              export PATH="$(dirname "${{ secrets.OCI_NODE_BIN }}"):$PATH"
+            fi
+            if [ -n "${{ secrets.OCI_NPM_BIN }}" ]; then
+              export PATH="$(dirname "${{ secrets.OCI_NPM_BIN }}"):$PATH"
+            fi
+            if [ -n "${{ secrets.OCI_PM2_BIN }}" ]; then
+              export PATH="$(dirname "${{ secrets.OCI_PM2_BIN }}"):$PATH"
+            fi
+
+            for p in /usr/local/bin /usr/bin /bin; do
+              [ -x "$p/node" ] && export PATH="$p:$PATH"
+              [ -x "$p/npm" ] && export PATH="$p:$PATH"
+              [ -x "$p/pm2" ] && export PATH="$p:$PATH"
+            done
+
+            if ! command -v node >/dev/null 2>&1; then
+              NODE_BIN=$(find "$HOME/.nvm/versions/node" -type f -path "*/bin/node" 2>/dev/null | sort | tail -n 1)
+              [ -n "$NODE_BIN" ] && export PATH="$(dirname "$NODE_BIN"):$PATH"
+            fi
+            if ! command -v npm >/dev/null 2>&1; then
+              NPM_BIN=$(find "$HOME/.nvm/versions/node" -type f -path "*/bin/npm" 2>/dev/null | sort | tail -n 1)
+              [ -n "$NPM_BIN" ] && export PATH="$(dirname "$NPM_BIN"):$PATH"
+            fi
+            if ! command -v pm2 >/dev/null 2>&1; then
+              PM2_BIN=$(find "$HOME" -type f -path "*/bin/pm2" 2>/dev/null | sort | tail -n 1)
+              [ -n "$PM2_BIN" ] && export PATH="$(dirname "$PM2_BIN"):$PATH"
+            fi
+
+            command -v node >/dev/null 2>&1 || { echo node not found for user $(whoami); exit 127; }
+            command -v npm >/dev/null 2>&1 || { echo npm not found for user $(whoami); exit 127; }
+            command -v pm2 >/dev/null 2>&1 || { echo pm2 not found for user $(whoami); exit 127; }
             cd /opt/react-resume
             npm run build
             pm2 restart ecosystem.config.js --update-env
