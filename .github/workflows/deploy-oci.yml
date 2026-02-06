@@ -38,9 +38,15 @@ jobs:
 
       - name: 서버 빌드 및 PM2 재시작
         run: |
-          ssh ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }} '
+          ssh ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }} "bash -lc '
             set -e
+            [ -f ~/.profile ] && . ~/.profile || true
+            [ -f ~/.bashrc ] && . ~/.bashrc || true
+            [ -s ~/.nvm/nvm.sh ] && . ~/.nvm/nvm.sh || true
+            command -v node >/dev/null 2>&1 || { echo node not found; exit 127; }
+            command -v npm >/dev/null 2>&1 || { echo npm not found; exit 127; }
+            command -v pm2 >/dev/null 2>&1 || { echo pm2 not found; exit 127; }
             cd /opt/react-resume
             npm run build
             pm2 restart ecosystem.config.js --update-env
-          '
+          '"
