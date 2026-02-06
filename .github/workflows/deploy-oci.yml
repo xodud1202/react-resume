@@ -42,4 +42,4 @@ jobs:
 
       - name: 서버 빌드 및 PM2 재시작
         run: |
-          ssh ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }} "sudo -i bash -lc 'set -e; cd /opt/react-resume; npm run build; pm2 restart ecosystem.config.js --update-env'"
+          ssh ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }} "sudo -i bash -lc 'set -e; NODE_BIN=\$(ls -1 /root/.nvm/versions/node/*/bin/node 2>/dev/null | tail -n 1); [ -n \"\$NODE_BIN\" ] || { echo node not found in /root/.nvm; exit 127; }; export PATH=\$(dirname \"\$NODE_BIN\"):\$PATH; cd /opt/react-resume; npm run build; pm2 restart ecosystem.config.js --update-env'"
