@@ -6,9 +6,14 @@
     "build": "next build",
     "lint": "next lint",
     "dev": "cross-env PORT=3013 next dev",
-    "start": "cross-env PORT=3013 next start"
+    "start": "cross-env PORT=3013 next start",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
+    "@opennextjs/cloudflare": "^1.17.1",
     "next": "15.3.9",
     "react": "^19.0.0",
     "react-cookie": "^8.0.1",
@@ -26,6 +31,7 @@
     "eslint-config-next": "15.3.9",
     "mini-css-extract-plugin": "^2.9.2",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.68.1"
   }
 }
