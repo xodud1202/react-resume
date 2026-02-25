@@ -8,7 +8,7 @@ import EducationSection from "@/components/EducationSection";
 import SkillsSection from "@/components/SkillsSection";
 import OtherInfoSection from "@/components/OtherInfoSection";
 
-// import {useRouter} from "next/router";
+import {useRouter} from "next/router";
 import {GetServerSideProps, GetServerSidePropsContext} from "next";
 import {ResumeBase} from "@/components/HeaderSection";
 
@@ -43,14 +43,14 @@ function resolveQueryStringValue(value: string | string[] | undefined): string |
 /**
  * index.getRequestBaseUrl : SSR 요청의 절대 URL 생성을 위한 baseUrl을 계산한다.
  */
-/*function getRequestBaseUrl(ctx: GetServerSidePropsContext): string {
+function getRequestBaseUrl(ctx: GetServerSidePropsContext): string {
     // 프록시 환경에서는 x-forwarded-proto를 우선 사용한다.
     const protocolHeader = ctx.req.headers["x-forwarded-proto"];
     const protocol = Array.isArray(protocolHeader) ? protocolHeader[0] : (protocolHeader || "http");
     const host = ctx.req.headers.host;
 
     return `${protocol}://${host}`;
-}*/
+}
 
 /**
  * index.getServerSideProps : SSR에서 이력서 정보를 조회하여 페이지 props를 구성한다.
@@ -76,8 +76,8 @@ export const getServerSideProps: GetServerSideProps<ResumePageProps> = async (
 
     try {
         // 서버 사이드 fetch는 절대 URL로 /api 리라이트 경로를 직접 호출한다.
-        // const baseUrl = getRequestBaseUrl(ctx);
-        const response = await fetch(`https://be.xodud1202.kro.kr/api/resume/info?loginId=${encodeURIComponent(loginId)}`, {
+        const baseUrl = getRequestBaseUrl(ctx);
+        const response = await fetch(`${baseUrl}/api/resume/info?loginId=${encodeURIComponent(loginId)}`, {
             method: "GET",
             headers: { "Content-Type": "application/json" },
         });
@@ -103,13 +103,12 @@ export const getServerSideProps: GetServerSideProps<ResumePageProps> = async (
  * index.HomePage : SSR로 조회한 이력서 데이터를 화면에 렌더링한다.
  */
 const HomePage = ({ data }: ResumePageProps) => {
-    // const router = useRouter();
+    const router = useRouter();
 
     // 조회 실패 시 noResume 페이지로 이동한다.
-    console.log(data);
     if (!data || data.result !== 'OK') {
         if (typeof window !== 'undefined') {
-            // router.replace('/noResume');
+            router.replace('/noResume');
         }
         return null;
     }
