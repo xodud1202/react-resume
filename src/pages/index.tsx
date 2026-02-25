@@ -8,7 +8,7 @@ import EducationSection from "@/components/EducationSection";
 import SkillsSection from "@/components/SkillsSection";
 import OtherInfoSection from "@/components/OtherInfoSection";
 
-import {useRouter} from "next/router";
+// import {useRouter} from "next/router";
 import {GetServerSideProps, GetServerSidePropsContext} from "next";
 import {ResumeBase} from "@/components/HeaderSection";
 
@@ -103,7 +103,7 @@ export const getServerSideProps: GetServerSideProps<ResumePageProps> = async (
  * index.HomePage : SSR로 조회한 이력서 데이터를 화면에 렌더링한다.
  */
 const HomePage = ({ data }: ResumePageProps) => {
-    const router = useRouter();
+    // const router = useRouter();
 
     // 조회 실패 시 noResume 페이지로 이동한다.
     console.log(data);
