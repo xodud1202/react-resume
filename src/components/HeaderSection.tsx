@@ -40,7 +40,7 @@ const HeaderSection = ({resumeBase}: HeaderSectionProps) => {
                             className="w-[110px] h-auto"
                             src={ resumeBase.faceImgPath }
                             alt="이력서 증명사진"
-                            width={128}
+                            width={128} 
                             height={165}
                         />
                     )}
