@@ -106,9 +106,10 @@ const HomePage = ({ data }: ResumePageProps) => {
     const router = useRouter();
 
     // 조회 실패 시 noResume 페이지로 이동한다.
+    console.log(data);
     if (!data || data.result !== 'OK') {
         if (typeof window !== 'undefined') {
-            router.replace('/noResume');
+            // router.replace('/noResume');
         }
         return null;
     }
