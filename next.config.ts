@@ -4,7 +4,14 @@ const nextConfig: NextConfig = {
     /* config options here */
     images: {
         // 1) 도메인 허용할 때
-        domains: ['image.xodud1202.kro.kr'],
+        remotePatterns: [
+          {
+            protocol: 'https',
+            hostname: 'image.xodud1202.kro.kr',
+            pathname: '/publist/**',
+          },
+        ],
+        unoptimized: true,
     },
     /**
      * react-resume.nextConfig.rewrites : /api 요청을 백엔드로 프록시한다.
