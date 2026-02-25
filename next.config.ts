@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
         return [
             {
                 source: '/api/:path*',
-                destination: `${process.env.BACKEND_URL}/:path*`,
+                destination: `https://be.xodud1202.kro.kr/:path*`,
             },
         ];
     },
