@@ -17,6 +17,32 @@ const INITIAL_VISIBLE_COUNT = 10;
 const LOAD_MORE_COUNT = 10;
 
 /**
+ * 기사 발행일시를 yy/MM/dd HH:mm:ss 형식으로 변환한다.
+ * @param publishedDt 발행일시 문자열 (예: "2025-03-27 14:30:00" 또는 ISO 형식)
+ * @returns 포맷된 발행일시 문자열, 변환 불가 시 빈 문자열
+ */
+function formatPublishedDateTime(publishedDt: string | undefined): string {
+  // 값이 없으면 빈 문자열을 반환한다.
+  if (typeof publishedDt !== "string" || !publishedDt.trim()) {
+    return "";
+  }
+
+  // 공백이 포함된 형식(YYYY-MM-DD HH:mm:ss)을 ISO 형식으로 변환해 Date 객체를 생성한다.
+  const parsedDate = new Date(publishedDt.replace(" ", "T"));
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "";
+  }
+
+  // yy/MM/dd HH:mm:ss 형태로 포맷한다.
+  const year = String(parsedDate.getFullYear()).slice(-2);
+  const month = String(parsedDate.getMonth() + 1).padStart(2, "0");
+  const day = String(parsedDate.getDate()).padStart(2, "0");
+  const hour = String(parsedDate.getHours()).padStart(2, "0");
+  const minute = String(parsedDate.getMinutes()).padStart(2, "0");
+  return `${year}/${month}/${day} ${hour}:${minute}`;
+}
+
+/**
  * 기본 ID 목록과 저장된 정렬 목록을 병합해 유효한 정렬 목록을 생성한다.
  */
 function normalizeOrderedIds(baseIds: string[], storedOrderIds: string[]): string[] {
@@ -70,9 +96,9 @@ function ArticleItem({ article }: { article: Article }) {
           <span className="text-base font-bold text-black leading-snug break-keep">
             {article.title}
           </span>
-          {article.publishedDt && (
-            <span className="text-xs text-gray-400 whitespace-nowrap">
-              {article.publishedDt.slice(0, 10)}
+          {formatPublishedDateTime(article.publishedDt) && (
+            <span className="text-xs text-gray-400 whitespace-nowrap text-right">
+              {formatPublishedDateTime(article.publishedDt)}
             </span>
           )}
         </div>
