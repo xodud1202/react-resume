@@ -18,6 +18,29 @@ jobs:
       - name: 체크아웃
         uses: actions/checkout@v4
 
+      - name: Node.js 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 의존성 설치
+        run: npm ci
+
+      - name: 프로덕션 빌드
+        run: npm run build
+
+      - name: 배포 산출물 구성
+        run: |
+          rm -rf deploy
+          mkdir -p deploy/.next
+          cp -R .next/standalone/. deploy/
+          cp -R .next/static deploy/.next/static
+          cp -R public deploy/public
+          cp ecosystem.config.js deploy/ecosystem.config.js
+          rm -f deploy/.env
+          rm -f deploy/.env.local
+
       - name: SSH 에이전트 설정
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -26,20 +49,16 @@ jobs:
       - name: rsync 설치
         run: sudo apt-get update && sudo apt-get install -y rsync
 
-      - name: 소스 업로드
+      - name: 배포 산출물 업로드
         run: |
           ssh-keyscan -H ${{ secrets.OCI_HOST }} >> ~/.ssh/known_hosts
           rsync -az \
-            --exclude '.git' \
-            --exclude '.github' \
-            --exclude 'node_modules' \
-            --exclude '.next' \
-            --exclude '.env' \
-            --exclude '.env.local' \
-            --exclude '.env.production' \
-            --exclude 'ecosystem.config.js' \
-            ./ ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }}:/opt/react-resume/
+            --rsync-path="sudo rsync" \
+            --filter='P .env' \
+            --filter='P .env.local' \
+            --delete \
+            ./deploy/ ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }}:/opt/react-resume/
 
-      - name: 서버 빌드 및 PM2 재시작
+      - name: PM2 프로세스 재생성
         run: |
-          ssh ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }} "sudo -i bash -lc 'set -e; [ -x \"${{ secrets.OCI_NODE_BIN }}\" ] || { echo OCI_NODE_BIN invalid; exit 127; }; export PATH=\$(dirname \"${{ secrets.OCI_NODE_BIN }}\"):\$PATH; cd /opt/react-resume; npm run build; pm2 restart ecosystem.config.js --update-env'"
+          ssh ${{ secrets.OCI_USER }}@${{ secrets.OCI_HOST }} "sudo -i bash -lc 'set -e; [ -x \"${{ secrets.OCI_NODE_BIN }}\" ] || { echo OCI_NODE_BIN invalid; exit 127; }; export PATH=\$(dirname \"${{ secrets.OCI_NODE_BIN }}\"):\$PATH; cd /opt/react-resume; [ -f server.js ] || { echo standalone server.js not found; exit 1; }; pm2 delete react-resume >/dev/null 2>&1 || true; pm2 start ecosystem.config.js --update-env'"

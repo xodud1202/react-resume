@@ -2,13 +2,15 @@ module.exports = {
     apps: [
         {
             name: "react-resume",
-            script: "npm",
-            args: "start",
+            cwd: __dirname,
+            script: "./server.js",
+            interpreter: "node",
             autorestart: false,
             max_memory_restart: "300M",
             env: {
-              PORT: 3013, // 여기에 포트를 명시합니다.
-              NODE_ENV: "production"
+                HOSTNAME: "0.0.0.0",
+                PORT: 3013,
+                NODE_ENV: "production"
             }
         }
     ]
