@@ -10,6 +10,8 @@ import {
 import {
   getPressOrderFromCookie,
   setPressOrderToCookie,
+  getSelectedPressFromCookie,
+  setSelectedPressToCookie,
 } from "@/utils/newsCookieStorage";
 import PressOrderModal from "./PressOrderModal";
 
@@ -151,15 +153,21 @@ function NewsPage() {
       setPressOrderIds(storedOrder);
       setMetaFile(meta);
 
-      // 초기 언론사 결정: 쿠키 순서 → 메타 기본값 → 첫 번째
+      // 초기 언론사 결정: 마지막 선택 쿠키 → 쿠키 순서 첫 번째 → 메타 기본값 → 첫 번째
       const baseIds = meta.pressList.map((p) => p.id);
       const orderedIds = normalizeOrderedIds(baseIds, storedOrder);
+      const lastSelectedId = getSelectedPressFromCookie();
       const initialPressId =
+        (baseIds.includes(lastSelectedId) ? lastSelectedId : "") ||
         orderedIds[0] ||
         meta.defaultSelection.defaultPressId ||
         meta.pressList[0]?.id ||
         "";
       setSelectedPressId(initialPressId);
+      // 결정된 초기 언론사를 쿠키에 저장한다. (직접 클릭 없이 결정된 경우도 포함)
+      if (initialPressId) {
+        setSelectedPressToCookie(initialPressId);
+      }
       // 언론사 목록이 없으면 로딩 상태 해제
       if (!initialPressId) {
         setIsLoading(false);
@@ -195,18 +203,19 @@ function NewsPage() {
       setCategoryArticleSections(sections);
       setIsLoading(false);
 
-      // 모바일 선택 카테고리: 현재 선택이 유효하면 유지, 아니면 첫 번째로
-      setMobileSelectedCategoryId((prev) => {
-        const isValid = sections.some((s) => s.categoryId === prev);
-        return isValid ? prev : sections[0]?.categoryId ?? "";
-      });
+      // 언론사가 변경될 때마다 모바일 선택 카테고리를 첫 번째로 초기화한다.
+      setMobileSelectedCategoryId(sections[0]?.categoryId ?? "");
     }
 
     loadArticles();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPressId]);
 
+  /**
+   * 언론사를 선택한다. 선택된 언론사 ID를 쿠키에 저장한다.
+   */
   function handleSelectPress(pressId: string) {
+    setSelectedPressToCookie(pressId);
     setSelectedPressId(pressId);
     setIsLoading(true);
   }
@@ -286,10 +295,19 @@ function NewsPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 pt-4 pb-4">
+    <div className="min-h-screen bg-gray-50">
+      {/* 상하좌우 스크롤에 고정되는 컨트롤 바: 언론사 선택 + 순서변경 버튼을 pc/mo 가운데 정렬로 표시 */}
+      <div className="fixed top-0 left-0 right-0 z-50 bg-gray-50 border-b border-gray-200">
+        <div className="flex justify-center px-4 py-2">
+          {controlRow}
+        </div>
+      </div>
+
+      {/* 고정 바 높이(50px) 만큼 상단 여백 확보 */}
+      <div className="pt-[50px] px-4 pb-4">
+
       {/* PC 레이아웃 */}
       <div className="hidden md:block">
-        <div className="mb-4">{controlRow}</div>
         {isLoading ? (
           <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
             뉴스를 불러오는 중...
@@ -339,7 +357,6 @@ function NewsPage() {
 
       {/* 모바일 레이아웃 */}
       <div className="block md:hidden">
-        <div className="mb-3">{controlRow}</div>
         {/* 카테고리 탭 */}
         <div className="flex gap-2 overflow-x-auto pb-2 mb-3 [&::-webkit-scrollbar]:hidden">
           {categoryArticleSections.map((section) => (
@@ -401,6 +418,8 @@ function NewsPage() {
         onClose={handleCloseModal}
         onSave={handleSaveOrder}
       />
+
+      </div>{/* pt-[50px] 컨텐츠 래퍼 닫기 */}
     </div>
   );
 }
