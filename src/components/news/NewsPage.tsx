@@ -79,7 +79,7 @@ function ArticleItem({ article }: { article: Article }) {
         href={article.url}
         target="_blank"
         rel="noreferrer"
-        className="flex gap-2 hover:opacity-75 transition-opacity"
+        className="w-full flex gap-2 hover:opacity-75 transition-opacity"
       >
         {article.thumbnailUrl && (
           <div className="flex-shrink-0 w-20 h-14 overflow-hidden rounded">
@@ -94,7 +94,7 @@ function ArticleItem({ article }: { article: Article }) {
             />
           </div>
         )}
-        <div className="flex flex-col gap-0.5 min-w-0">
+        <div className="w-full flex flex-col gap-0.5 min-w-0">
           <span className="text-base font-bold text-black leading-snug break-keep">
             {article.title}
           </span>
@@ -297,14 +297,33 @@ function NewsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 상하좌우 스크롤에 고정되는 컨트롤 바: 언론사 선택 + 순서변경 버튼을 pc/mo 가운데 정렬로 표시 */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-gray-50 border-b border-gray-200">
+      <div className="sticky top-0 left-0 right-0 z-50 bg-gray-50 border-b border-gray-200">
         <div className="flex justify-center px-4 py-2">
           {controlRow}
         </div>
+        {/* 모바일 전용: 카테고리 탭을 언론사 바 아래에 고정 노출 */}
+        <div className="md:hidden px-4 py-2 border-t border-gray-200 bg-gray-50">
+          <div className="flex gap-2 overflow-x-auto [&::-webkit-scrollbar]:hidden">
+            {categoryArticleSections.map((section) => (
+              <button
+                key={section.categoryId}
+                type="button"
+                className={`flex-shrink-0 px-3 py-1 rounded-full text-sm border transition-colors ${
+                  mobileSelectedCategoryId === section.categoryId
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+                onClick={() => handleMobileSelectCategory(section.categoryId)}
+              >
+                {section.categoryName}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* 고정 바 높이(50px) 만큼 상단 여백 확보 */}
-      <div className="pt-[50px] px-4 pb-4">
+      {/* 고정 바 높이만큼 상단 여백 확보: 모바일(언론사 바 50px + 카테고리 바 ~46px), PC(언론사 바 50px) */}
+      <div className="pt-[10px] md:pt-[50px] px-4 pb-4">
 
       {/* PC 레이아웃 */}
       <div className="hidden md:block">
@@ -357,24 +376,6 @@ function NewsPage() {
 
       {/* 모바일 레이아웃 */}
       <div className="block md:hidden">
-        {/* 카테고리 탭 */}
-        <div className="flex gap-2 overflow-x-auto pb-2 mb-3 [&::-webkit-scrollbar]:hidden">
-          {categoryArticleSections.map((section) => (
-            <button
-              key={section.categoryId}
-              type="button"
-              className={`flex-shrink-0 px-3 py-1 rounded-full text-sm border transition-colors ${
-                mobileSelectedCategoryId === section.categoryId
-                  ? "bg-blue-600 text-white border-blue-600"
-                  : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
-              }`}
-              onClick={() => handleMobileSelectCategory(section.categoryId)}
-            >
-              {section.categoryName}
-            </button>
-          ))}
-        </div>
-
         {/* 기사 목록 */}
         {isLoading ? (
           <div className="flex items-center justify-center h-40 text-gray-400 text-sm">
