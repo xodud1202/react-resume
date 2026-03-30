@@ -332,7 +332,7 @@ function NewsPage() {
             뉴스를 불러오는 중...
           </div>
         ) : (
-          <div className="flex gap-4 pb-4">
+          <div className="flex items-start gap-4 pb-4">
             {categoryArticleSections.map((section) => {
               const visibleCount =
                 pcVisibleCountByCategoryId[section.categoryId] ?? INITIAL_VISIBLE_COUNT;
@@ -341,7 +341,7 @@ function NewsPage() {
               return (
                 <div
                   key={section.categoryId}
-                  className="flex-shrink-0 w-[420px] bg-white rounded-lg shadow-sm border border-gray-200"
+                  className="flex-shrink-0 self-start w-[420px] bg-white rounded-lg shadow-sm border border-gray-200 md:sticky md:top-[50px]"
                 >
                   <h3 className="px-3 py-2 text-sm font-semibold text-gray-700 border-b bg-gray-50 rounded-t-lg">
                     {section.categoryName}
