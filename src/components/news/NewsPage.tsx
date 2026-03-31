@@ -17,6 +17,7 @@ import PressOrderModal from "./PressOrderModal";
 
 const INITIAL_VISIBLE_COUNT = 10;
 const LOAD_MORE_COUNT = 10;
+const PC_CATEGORY_TITLE_STICKY_TOP = 50;
 
 /**
  * 기사 발행일시를 yy/MM/dd HH:mm:ss 형식으로 변환한다.
@@ -109,6 +110,9 @@ function ArticleItem({ article }: { article: Article }) {
   );
 }
 
+/**
+ * 뉴스 페이지 컴포넌트
+ */
 function NewsPage() {
   const [metaFile, setMetaFile] = useState<NewsMetaFile | null>(null);
   const [selectedPressId, setSelectedPressId] = useState("");
@@ -220,49 +224,82 @@ function NewsPage() {
     setIsLoading(true);
   }
 
+  /**
+   * 언론사 순서 변경 모달을 연다.
+   */
   function handleOpenModal() {
+    // 현재 화면에 표시 중인 언론사 순서를 모달 초기값으로 반영한다.
     const ids = visiblePressList.map((p) => p.id);
     setModalOrderIds(ids);
+
+    // 현재 선택된 언론사가 목록에 없으면 첫 번째 언론사를 기본 선택값으로 사용한다.
     setModalSelectedPressId(
       ids.includes(selectedPressId) ? selectedPressId : ids[0] ?? ""
     );
     setIsModalOpen(true);
   }
 
+  /**
+   * 언론사 순서 변경 모달을 닫는다.
+   */
   function handleCloseModal() {
     setIsModalOpen(false);
   }
 
+  /**
+   * 모달에서 언론사를 선택한다.
+   */
   function handleModalSelectPress(pressId: string) {
     setModalSelectedPressId(pressId);
   }
 
+  /**
+   * 모달에서 선택한 언론사를 위로 이동한다.
+   */
   function handleModalMoveUp() {
     setModalOrderIds((prev) => moveIdByOffset(prev, modalSelectedPressId, -1));
   }
 
+  /**
+   * 모달에서 선택한 언론사를 아래로 이동한다.
+   */
   function handleModalMoveDown() {
     setModalOrderIds((prev) => moveIdByOffset(prev, modalSelectedPressId, 1));
   }
 
+  /**
+   * 모달에서 편집한 언론사 순서를 저장한다.
+   */
   function handleSaveOrder() {
+    // 화면 상태와 쿠키를 함께 갱신해 다음 방문에도 같은 순서를 유지한다.
     setPressOrderIds(modalOrderIds);
     setPressOrderToCookie(modalOrderIds);
     setIsModalOpen(false);
   }
 
+  /**
+   * PC 카테고리의 기사 노출 개수를 늘린다.
+   */
   function handlePcShowMore(categoryId: string) {
+    // 카테고리별 현재 노출 수를 기준으로 추가 기사 수를 누적한다.
     setPcVisibleCountByCategoryId((prev) => ({
       ...prev,
       [categoryId]: (prev[categoryId] ?? INITIAL_VISIBLE_COUNT) + LOAD_MORE_COUNT,
     }));
   }
 
+  /**
+   * 모바일에서 카테고리를 선택한다.
+   */
   function handleMobileSelectCategory(categoryId: string) {
+    // 카테고리 전환 시 기사 목록도 첫 페이지 기준으로 초기화한다.
     setMobileSelectedCategoryId(categoryId);
     setMobileVisibleCount(INITIAL_VISIBLE_COUNT);
   }
 
+  /**
+   * 모바일 기사 노출 개수를 늘린다.
+   */
   function handleMobileShowMore() {
     setMobileVisibleCount((prev) => prev + LOAD_MORE_COUNT);
   }
@@ -296,9 +333,9 @@ function NewsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* 상하좌우 스크롤에 고정되는 컨트롤 바: 언론사 선택 + 순서변경 버튼을 pc/mo 가운데 정렬로 표시 */}
-      <div className="sticky top-0 left-0 right-0 z-50 bg-gray-50 border-b border-gray-200">
-        <div className="flex justify-center px-4 py-2">
+      {/* PC에서는 화면 기준으로 헤더를 고정하고, 모바일에서는 기존 sticky 동작을 유지한다. */}
+      <div className="sticky top-0 left-0 right-0 z-50 bg-gray-50 border-b border-gray-200 md:fixed">
+        <div className="flex h-[50px] items-center justify-center px-4">
           {controlRow}
         </div>
         {/* 모바일 전용: 카테고리 탭을 언론사 바 아래에 고정 노출 */}
@@ -322,8 +359,8 @@ function NewsPage() {
         </div>
       </div>
 
-      {/* 고정 바 높이만큼 상단 여백 확보: 모바일(언론사 바 50px + 카테고리 바 ~46px), PC(언론사 바 50px) */}
-      <div className="pt-[10px] md:pt-[50px] px-4 pb-4">
+      {/* PC에서는 fixed 헤더 높이만큼, 모바일에서는 sticky 헤더 아래 최소 간격만 확보한다. */}
+      <div className="px-4 pb-4 pt-[10px] md:pt-[60px]">
 
       {/* PC 레이아웃 */}
       <div className="hidden md:block">
@@ -341,9 +378,12 @@ function NewsPage() {
               return (
                 <div
                   key={section.categoryId}
-                  className="flex-shrink-0 self-start w-[420px] bg-white rounded-lg shadow-sm border border-gray-200 md:sticky md:top-[50px]"
+                  className="flex-shrink-0 self-start w-[420px] bg-white rounded-lg shadow-sm border border-gray-200"
                 >
-                  <h3 className="px-3 py-2 text-sm font-semibold text-gray-700 border-b bg-gray-50 rounded-t-lg">
+                  <h3
+                    className="md:sticky z-10 px-3 py-2 text-sm font-semibold text-gray-700 border-b bg-gray-50 rounded-t-lg"
+                    style={{ top: `${PC_CATEGORY_TITLE_STICKY_TOP}px` }}
+                  >
                     {section.categoryName}
                   </h3>
                   <ol className="px-3 py-1 list-none">
