@@ -788,7 +788,7 @@ export default function SnippetWorkspacePage() {
 														<span className={styles.snippetCardTitle}>{snippet.title}</span>
 													</div>
 													<div className={styles.snippetCardMetaRow}>
-														<span className={styles.languageBadge}>{snippet.languageNm}</span>
+														<span className={styles.snippetCardLanguageBadge}>{snippet.languageNm}</span>
 														{snippet.tagNameText ? <span className={styles.snippetCardTagText}>{snippet.tagNameText}</span> : null}
 													</div>
 												</div>

@@ -388,13 +388,12 @@
 
 .snippetCardList {
 	display: grid;
-	gap: 0.45rem;
+	gap: 0.1rem;
 }
 
 .snippetCardItem {
 	display: grid;
-	gap: 0.32rem;
-	padding: 3px;
+	padding: 2px 3px;
 	border: 1px solid rgba(15, 23, 42, 0.06);
 	border-radius: var(--radius);
 	background: transparent;
@@ -417,12 +416,13 @@
 .snippetCardMetaRow {
 	display: flex;
 	align-items: center;
-	gap: 0.45rem;
+	gap: 0.32rem;
 	min-width: 0;
 }
 
 .snippetCardMetaRow {
-	padding-left: 2.15rem;
+	padding-left: 1.92rem;
+	margin-top: -0.12rem;
 }
 
 .snippetCardTitle {
@@ -430,9 +430,9 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	font-size: 0.88rem;
+	font-size: 0.82rem;
 	font-weight: 700;
-	line-height: 1.25;
+	line-height: 1.18;
 	color: var(--ink);
 }
 
@@ -441,8 +441,8 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	font-size: 0.76rem;
-	line-height: 1.2;
+	font-size: 0.64rem;
+	line-height: 1;
 	color: var(--muted);
 }
 
@@ -450,14 +450,14 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 1.7rem;
-	height: 1.7rem;
+	width: 1.5rem;
+	height: 1.5rem;
 	padding: 0;
 	border: none;
 	border-radius: var(--radius);
 	background: transparent;
 	color: #d28a15;
-	font-size: 0.95rem;
+	font-size: 0.84rem;
 	font-weight: 700;
 	cursor: pointer;
 	flex: 0 0 auto;
@@ -483,6 +483,21 @@
 .languageBadge {
 	background: rgba(35, 99, 143, 0.12);
 	color: var(--accent-strong);
+}
+
+.snippetCardLanguageBadge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	height: 15px;
+	padding: 0 0.28rem;
+	border-radius: 2px;
+	background: rgba(35, 99, 143, 0.1);
+	color: var(--accent-strong);
+	font-size: 0.6rem;
+	font-weight: 700;
+	line-height: 1;
 }
 
 .detailMetaPill,
