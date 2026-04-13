@@ -332,6 +332,14 @@ export async function fetchSnippetDetail(snippetNo: number): Promise<SnippetClie
 	};
 }
 
+// 사용자 태그를 등록합니다.
+export async function createSnippetTag(command: SnippetTagSaveRequest): Promise<SnippetClientApiResult<SnippetTag>> {
+	return requestSnippetClientApi<SnippetTag>("/api/snippet/tags", {
+		method: "POST",
+		body: command,
+	});
+}
+
 // 스니펫 복사 이력을 갱신합니다.
 export async function markSnippetCopied(snippetNo: number): Promise<SnippetClientApiResult<{ message: string }>> {
 	return requestSnippetClientApi<{ message: string }>(`/api/snippet/snippets/${snippetNo}/copied`, {

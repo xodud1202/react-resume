@@ -1,14 +1,16 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
+	createSnippetTag,
 	fetchSnippetDetail,
 	requestSnippetClientApi,
 	type SnippetBootstrapResponse,
 	type SnippetDetailResponse,
 	type SnippetSaveRequest,
 	type SnippetSaveResponse,
+	type SnippetTag,
 } from "@/services/snippetApiService";
 import styles from "./SnippetEditorPage.module.css";
 
@@ -18,6 +20,7 @@ const SnippetCodeEditor = dynamic(() => import("@/components/snippet/SnippetCode
 });
 
 export type SnippetEditorMode = "create" | "edit";
+const DEFAULT_NEW_TAG_COLOR_HEX = "#3B7EA1";
 
 interface SnippetEditorFormProps {
 	mode: SnippetEditorMode;
@@ -27,6 +30,42 @@ interface SnippetEditorFormProps {
 	onClose?: () => void;
 	onSaved?: (response: SnippetSaveResponse) => Promise<void> | void;
 	onSavingChange?: (saving: boolean) => void;
+}
+
+// 태그 검색 비교용 키를 생성합니다.
+function normalizeTagSearchKey(value: string): string {
+	const normalizedValue = value.trim().replace(/^#+/, "").trim();
+	return normalizedValue === "" ? "" : normalizedValue.toLowerCase();
+}
+
+// 태그 생성 요청에 사용할 표시명을 정규화합니다.
+function normalizeTagCreateName(value: string): string | null {
+	const normalizedValue = value.trim().replace(/^#+/, "").trim();
+	return normalizedValue === "" ? null : normalizedValue;
+}
+
+// 입력값과 정확히 일치하는 기존 태그를 찾습니다.
+function findMatchedTag(tagList: SnippetTag[], inputValue: string): SnippetTag | null {
+	const normalizedSearchKey = normalizeTagSearchKey(inputValue);
+	if (normalizedSearchKey === "") {
+		return null;
+	}
+	return tagList.find((tag) => normalizeTagSearchKey(tag.tagNm) === normalizedSearchKey) ?? null;
+}
+
+// 새로 생성된 태그를 기존 태그 목록에 합칩니다.
+function mergeAvailableTagList(tagList: SnippetTag[], createdTag: SnippetTag): SnippetTag[] {
+	const mergedTagMap = new Map<number, SnippetTag>();
+	tagList.forEach((tag) => {
+		mergedTagMap.set(tag.tagNo, tag);
+	});
+	mergedTagMap.set(createdTag.tagNo, createdTag);
+	return Array.from(mergedTagMap.values()).sort((leftTag, rightTag) => {
+		if (leftTag.sortSeq !== rightTag.sortSeq) {
+			return leftTag.sortSeq - rightTag.sortSeq;
+		}
+		return leftTag.tagNo - rightTag.tagNo;
+	});
 }
 
 // 편집 폼 기본값을 생성합니다.
@@ -73,8 +112,11 @@ export default function SnippetEditorForm({
 	const defaultLanguageCd = bootstrap.languageList[0]?.languageCd ?? "plain_text";
 	const [isInitializing, setIsInitializing] = useState(isEditMode);
 	const [isSaving, setIsSaving] = useState(false);
+	const [isCreatingTag, setIsCreatingTag] = useState(false);
 	const [message, setMessage] = useState("");
 	const [form, setForm] = useState<SnippetSaveRequest>(createDefaultForm(defaultLanguageCd));
+	const [availableTagList, setAvailableTagList] = useState<SnippetTag[]>(bootstrap.tagList);
+	const [tagInputValue, setTagInputValue] = useState("");
 
 	// 컴포넌트 마운트 상태를 추적해 언마운트 후 상태 갱신을 방지합니다.
 	useEffect(() => {
@@ -86,8 +128,34 @@ export default function SnippetEditorForm({
 	// 저장 중 상태를 부모에게 전달합니다.
 	useEffect(() => {
 		// 모달 닫기 제어를 위해 현재 저장 중 여부를 상위에 알려줍니다.
-		onSavingChange?.(isSaving);
-	}, [isSaving, onSavingChange]);
+		onSavingChange?.(isSaving || isCreatingTag);
+	}, [isCreatingTag, isSaving, onSavingChange]);
+
+	// 상위 bootstrap 태그 목록이 바뀌면 편집기 사용 가능 태그 목록을 동기화합니다.
+	useEffect(() => {
+		// 팝업이 열린 상태에서 외부 태그 목록이 갱신되면 최신 목록을 우선 반영합니다.
+		setAvailableTagList((previousTagList) => {
+			if (previousTagList.length === 0) {
+				return bootstrap.tagList;
+			}
+
+			const mergedTagMap = new Map<number, SnippetTag>();
+			bootstrap.tagList.forEach((tag) => {
+				mergedTagMap.set(tag.tagNo, tag);
+			});
+			previousTagList.forEach((tag) => {
+				if (!mergedTagMap.has(tag.tagNo)) {
+					mergedTagMap.set(tag.tagNo, tag);
+				}
+			});
+			return Array.from(mergedTagMap.values()).sort((leftTag, rightTag) => {
+				if (leftTag.sortSeq !== rightTag.sortSeq) {
+					return leftTag.sortSeq - rightTag.sortSeq;
+				}
+				return leftTag.tagNo - rightTag.tagNo;
+			});
+		});
+	}, [bootstrap.tagList]);
 
 	// 모드와 대상 번호에 맞춰 편집 폼을 초기화합니다.
 	useEffect(() => {
@@ -96,9 +164,11 @@ export default function SnippetEditorForm({
 		// 신규 작성은 기본 폼을, 수정은 상세 조회 결과를 사용합니다.
 		const initializeForm = async () => {
 			setMessage("");
+			setTagInputValue("");
 
 			if (!isEditMode) {
 				setForm(createDefaultForm(defaultLanguageCd));
+				setAvailableTagList(bootstrap.tagList);
 				setIsInitializing(false);
 				return;
 			}
@@ -106,6 +176,7 @@ export default function SnippetEditorForm({
 			if (snippetNo === null || Number.isNaN(snippetNo)) {
 				setMessage("수정할 스니펫을 확인해주세요.");
 				setForm(createDefaultForm(defaultLanguageCd));
+				setAvailableTagList(bootstrap.tagList);
 				setIsInitializing(false);
 				return;
 			}
@@ -119,11 +190,13 @@ export default function SnippetEditorForm({
 			if (!detailResult.ok || !detailResult.data) {
 				setMessage(detailResult.message || "수정할 스니펫을 불러오지 못했습니다.");
 				setForm(createDefaultForm(defaultLanguageCd));
+				setAvailableTagList(bootstrap.tagList);
 				setIsInitializing(false);
 				return;
 			}
 
 			setForm(createFormFromDetail(detailResult.data));
+			setAvailableTagList(bootstrap.tagList);
 			setIsInitializing(false);
 		};
 
@@ -131,7 +204,7 @@ export default function SnippetEditorForm({
 		return () => {
 			isCancelled = true;
 		};
-	}, [defaultLanguageCd, isEditMode, snippetNo]);
+	}, [bootstrap.tagList, defaultLanguageCd, isEditMode, snippetNo]);
 
 	// 문자열 입력 필드를 갱신합니다.
 	const handleFieldChange = (fieldName: "title" | "summary" | "memo" | "languageCd", value: string) => {
@@ -160,15 +233,88 @@ export default function SnippetEditorForm({
 		}));
 	};
 
-	// 태그 선택 상태를 토글합니다.
-	const handleTagToggle = (tagNo: number, checked: boolean) => {
-		// 체크 여부에 따라 태그 번호를 추가하거나 제거합니다.
+	// 선택한 태그를 추가합니다.
+	const handleTagSelect = (tagNo: number) => {
+		// 이미 선택된 태그는 유지하고, 새 태그만 목록 끝에 추가합니다.
 		setForm((previousForm) => ({
 			...previousForm,
-			tagNoList: checked
-				? [...previousForm.tagNoList.filter((currentTagNo) => currentTagNo !== tagNo), tagNo]
-				: previousForm.tagNoList.filter((currentTagNo) => currentTagNo !== tagNo),
+			tagNoList: previousForm.tagNoList.includes(tagNo) ? previousForm.tagNoList : [...previousForm.tagNoList, tagNo],
 		}));
+		setTagInputValue("");
+	};
+
+	// 선택한 태그를 제거합니다.
+	const handleTagRemove = (tagNo: number) => {
+		// 선택 태그 칩에서 제거 버튼을 누르면 즉시 선택 목록에서 제외합니다.
+		setForm((previousForm) => ({
+			...previousForm,
+			tagNoList: previousForm.tagNoList.filter((currentTagNo) => currentTagNo !== tagNo),
+		}));
+	};
+
+	// 태그 입력값을 갱신합니다.
+	const handleTagInputChange = (value: string) => {
+		// 검색과 신규 생성 후보 계산에 사용할 원본 입력값을 그대로 유지합니다.
+		setTagInputValue(value);
+	};
+
+	// 입력값 기준으로 새 태그를 생성하고 즉시 선택합니다.
+	const handleCreateTagFromInput = async () => {
+		// 공백과 # 접두사를 제거한 결과가 있을 때만 신규 태그를 생성합니다.
+		const normalizedTagName = normalizeTagCreateName(tagInputValue);
+		if (normalizedTagName === null || isCreatingTag) {
+			return;
+		}
+
+		setIsCreatingTag(true);
+		setMessage("");
+		const result = await createSnippetTag({
+			tagNm: normalizedTagName,
+			colorHex: DEFAULT_NEW_TAG_COLOR_HEX,
+			sortSeq: null,
+		});
+
+		if (!result.ok || !result.data) {
+			if (isMountedRef.current) {
+				setMessage(result.message || "태그 생성에 실패했습니다.");
+				setIsCreatingTag(false);
+			}
+			return;
+		}
+
+		if (!isMountedRef.current) {
+			return;
+		}
+
+		const createdTag = result.data;
+		setAvailableTagList((previousTagList) => mergeAvailableTagList(previousTagList, createdTag));
+		setForm((previousForm) => ({
+			...previousForm,
+			tagNoList: previousForm.tagNoList.includes(createdTag.tagNo) ? previousForm.tagNoList : [...previousForm.tagNoList, createdTag.tagNo],
+		}));
+		setTagInputValue("");
+		setIsCreatingTag(false);
+	};
+
+	// 태그 입력창의 Enter 동작을 처리합니다.
+	const handleTagInputKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+		// IME 조합 중 입력은 무시하고, Enter에서만 기존 태그 선택 또는 신규 생성을 시도합니다.
+		if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+			return;
+		}
+
+		const normalizedTagName = normalizeTagCreateName(tagInputValue);
+		if (normalizedTagName === null) {
+			return;
+		}
+
+		event.preventDefault();
+		const matchedTag = findMatchedTag(availableTagList, tagInputValue);
+		if (matchedTag !== null) {
+			handleTagSelect(matchedTag.tagNo);
+			return;
+		}
+		void handleCreateTagFromInput();
 	};
 
 	// 저장 요청에 사용할 payload를 정리합니다.
@@ -235,6 +381,19 @@ export default function SnippetEditorForm({
 	const layoutClassName = embedded ? styles.embeddedEditorLayout : styles.editorLayout;
 	const formPanelClassName = `${styles.formPanel} ${embedded ? styles.embeddedFormPanel : ""}`.trim();
 	const formScrollBodyClassName = `${styles.formScrollBody} ${embedded ? styles.embeddedFormScrollBody : ""}`.trim();
+	const normalizedTagInputKey = normalizeTagSearchKey(tagInputValue);
+	const normalizedTagCreateValue = normalizeTagCreateName(tagInputValue);
+	const matchedTag = findMatchedTag(availableTagList, tagInputValue);
+	const selectedTagList = availableTagList.filter((tag) => form.tagNoList.includes(tag.tagNo));
+	const filteredTagSuggestionList =
+		normalizedTagInputKey === ""
+			? []
+			: availableTagList.filter((tag) => {
+					if (form.tagNoList.includes(tag.tagNo)) {
+						return false;
+					}
+					return normalizeTagSearchKey(tag.tagNm).includes(normalizedTagInputKey);
+			  });
 
 	return (
 		<div className={shellClassName}>
@@ -255,7 +414,12 @@ export default function SnippetEditorForm({
 							<Link href="/snippet" className={styles.secondaryLink}>
 								목록으로
 							</Link>
-							<button type="button" className={styles.primaryButton} onClick={handleSave} disabled={isSaving || isInitializing}>
+							<button
+								type="button"
+								className={styles.primaryButton}
+								onClick={handleSave}
+								disabled={isSaving || isInitializing || isCreatingTag}
+							>
 								{isSaving ? "저장 중" : isEditMode ? "수정 저장" : "등록 저장"}
 							</button>
 						</>
@@ -328,22 +492,74 @@ export default function SnippetEditorForm({
 							</div>
 
 							<section className={styles.tagSection}>
-								<h2 className={styles.sectionTitle}>태그</h2>
-								<div className={styles.tagGrid}>
-									{bootstrap.tagList.length > 0 ? (
-										bootstrap.tagList.map((tag) => (
-											<label key={tag.tagNo} className={styles.tagOption}>
-												<input
-													type="checkbox"
-													checked={form.tagNoList.includes(tag.tagNo)}
-													onChange={(event) => handleTagToggle(tag.tagNo, event.target.checked)}
-												/>
-												<span>#{tag.tagNm}</span>
-											</label>
+								<div className={styles.tagSectionHeader}>
+									<h2 className={styles.sectionTitle}>태그</h2>
+									<span className={styles.tagCounter}>{form.tagNoList.length}개 선택</span>
+								</div>
+
+								<div className={styles.selectedTagList}>
+									{selectedTagList.length > 0 ? (
+										selectedTagList.map((tag) => (
+											<span key={tag.tagNo} className={styles.selectedTagChip}>
+												<span className={styles.selectedTagChipLabel}>#{tag.tagNm}</span>
+												<button
+													type="button"
+													className={styles.selectedTagChipRemove}
+													onClick={() => handleTagRemove(tag.tagNo)}
+													aria-label={`태그 ${tag.tagNm} 제거`}
+												>
+													×
+												</button>
+											</span>
 										))
 									) : (
-										<p className={styles.helperText}>아직 등록된 태그가 없습니다. 메인 화면에서 먼저 태그를 추가할 수 있습니다.</p>
+										<p className={styles.helperText}>선택된 태그가 없습니다. 태그를 입력하고 Enter를 눌러 바로 추가할 수 있습니다.</p>
 									)}
+								</div>
+
+								<div className={styles.tagComposer}>
+									<input
+										type="text"
+										value={tagInputValue}
+										onChange={(event) => handleTagInputChange(event.target.value)}
+										onKeyDown={handleTagInputKeyDown}
+										className={`${styles.textInput} ${styles.tagTextInput}`.trim()}
+										placeholder="#태그를 입력하고 Enter를 눌러 추가하세요"
+									/>
+
+									{normalizedTagInputKey !== "" ? (
+										<div className={styles.tagSuggestionPanel}>
+											{filteredTagSuggestionList.map((tag) => (
+												<button
+													key={tag.tagNo}
+													type="button"
+													className={styles.tagSuggestionButton}
+													onClick={() => handleTagSelect(tag.tagNo)}
+												>
+													<span className={styles.tagSuggestionName}>#{tag.tagNm}</span>
+													<span className={styles.tagSuggestionHint}>기존 태그 선택</span>
+												</button>
+											))}
+
+											{matchedTag === null && normalizedTagCreateValue !== null ? (
+												<button
+													type="button"
+													className={`${styles.tagSuggestionButton} ${styles.tagSuggestionCreateButton}`.trim()}
+													onClick={() => {
+														void handleCreateTagFromInput();
+													}}
+													disabled={isCreatingTag}
+												>
+													<span className={styles.tagSuggestionName}>#{normalizedTagCreateValue}</span>
+													<span className={styles.tagSuggestionHint}>{isCreatingTag ? "생성 중" : "새 태그 생성"}</span>
+												</button>
+											) : null}
+
+											{matchedTag !== null && form.tagNoList.includes(matchedTag.tagNo) ? (
+												<p className={styles.tagSuggestionHelper}>이미 선택된 태그입니다.</p>
+											) : null}
+										</div>
+									) : null}
 								</div>
 							</section>
 
@@ -375,7 +591,12 @@ export default function SnippetEditorForm({
 
 						{embedded ? (
 							<div className={styles.formActionFooter}>
-								<button type="button" className={`${styles.primaryButton} ${styles.embeddedSaveButton}`} onClick={handleSave} disabled={isSaving}>
+								<button
+									type="button"
+									className={`${styles.primaryButton} ${styles.embeddedSaveButton}`}
+									onClick={handleSave}
+									disabled={isSaving || isCreatingTag}
+								>
 									{isSaving ? "저장 중" : isEditMode ? "수정 저장" : "등록 저장"}
 								</button>
 							</div>

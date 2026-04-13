@@ -276,20 +276,118 @@
 	margin-top: 1.25rem;
 }
 
-.tagGrid {
+.tagSectionHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1rem;
+}
+
+.tagCounter {
+	font-size: 0.88rem;
+	color: var(--snippet-muted);
+}
+
+.selectedTagList {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 0.65rem;
 }
 
-.tagOption {
+.selectedTagChip {
 	display: inline-flex;
 	align-items: center;
 	gap: 0.45rem;
-	padding: 0.65rem 0.8rem;
+	padding: 0.45rem 0.65rem;
 	border: 1px solid rgba(25, 34, 49, 0.12);
-	border-radius: 999px;
+	border-radius: 3px;
 	background: rgba(255, 255, 255, 0.72);
+}
+
+.selectedTagChipLabel {
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+.selectedTagChipRemove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.3rem;
+	height: 1.3rem;
+	padding: 0;
+	border: none;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--snippet-muted);
+	cursor: pointer;
+}
+
+.selectedTagChipRemove:hover {
+	background: rgba(25, 34, 49, 0.08);
+	color: var(--snippet-ink);
+}
+
+.tagComposer {
+	display: grid;
+	gap: 0.55rem;
+}
+
+.tagTextInput {
+	min-height: 2.8rem;
+}
+
+.tagSuggestionPanel {
+	display: grid;
+	border: 1px solid rgba(25, 34, 49, 0.12);
+	border-radius: 3px;
+	background: #ffffff;
+	overflow: hidden;
+}
+
+.tagSuggestionButton {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1rem;
+	width: 100%;
+	padding: 0.75rem 0.9rem;
+	border: none;
+	border-bottom: 1px solid rgba(25, 34, 49, 0.08);
+	background: #ffffff;
+	color: var(--snippet-ink);
+	text-align: left;
+	cursor: pointer;
+}
+
+.tagSuggestionButton:last-child {
+	border-bottom: none;
+}
+
+.tagSuggestionButton:hover:not(:disabled) {
+	background: rgba(25, 34, 49, 0.04);
+}
+
+.tagSuggestionCreateButton {
+	background: rgba(204, 93, 55, 0.08);
+}
+
+.tagSuggestionName {
+	font-weight: 700;
+	line-height: 1.25;
+}
+
+.tagSuggestionHint {
+	font-size: 0.84rem;
+	color: var(--snippet-muted);
+	white-space: nowrap;
+}
+
+.tagSuggestionHelper {
+	margin: 0;
+	padding: 0.8rem 0.9rem;
+	color: var(--snippet-muted);
+	background: rgba(25, 34, 49, 0.02);
 }
 
 .helperText,
