@@ -24,9 +24,9 @@ const nextConfig: NextConfig = {
                 destination: `https://be.xodud1202.kro.kr/api/last/news/:path*`,
             },
             {
-                // 기존 API 프록시: /api/* → be.xodud1202.kro.kr/*
+                // 기존 API 프록시: /api/* → be.xodud1202.kro.kr/api/*
                 source: '/api/:path*',
-                destination: `https://be.xodud1202.kro.kr/:path*`,
+                destination: `https://be.xodud1202.kro.kr/api/:path*`,
             },
         ];
     },
