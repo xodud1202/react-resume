@@ -7,6 +7,8 @@ import {
 	fetchSnippetDetail,
 	fetchSnippetList,
 	logoutSnippet,
+	markSnippetCopied,
+	markSnippetViewed,
 	refreshSnippetSession,
 	requestSnippetClientApi,
 	type SnippetBootstrapResponse,
@@ -18,13 +20,34 @@ import {
 } from "@/services/snippetApiService";
 import styles from "./SnippetWorkspacePage.module.css";
 
+type SnippetQuickFilter = "all" | "favorite" | "recent_viewed" | "recent_copied" | "duplicate";
+type SnippetSortBy = "updated_desc" | "viewed_desc" | "copied_desc" | "copy_count_desc" | "title_asc";
+
 interface SnippetListReloadOptions {
 	q?: string;
 	folderNo?: number | null;
 	tagNo?: number | null;
 	languageCd?: string;
-	favoriteYn?: string;
+	includeBodyYn?: string;
+	sortBy?: SnippetSortBy;
+	quickFilter?: SnippetQuickFilter;
 }
+
+const QUICK_FILTER_OPTION_LIST: Array<{ value: SnippetQuickFilter; label: string }> = [
+	{ value: "all", label: "전체" },
+	{ value: "favorite", label: "즐겨찾기" },
+	{ value: "recent_viewed", label: "최근 본" },
+	{ value: "recent_copied", label: "최근 복사" },
+	{ value: "duplicate", label: "중복 후보" },
+];
+
+const SORT_OPTION_LIST: Array<{ value: SnippetSortBy; label: string }> = [
+	{ value: "updated_desc", label: "수정일순" },
+	{ value: "viewed_desc", label: "최근 조회순" },
+	{ value: "copied_desc", label: "최근 복사순" },
+	{ value: "copy_count_desc", label: "복사 수순" },
+	{ value: "title_asc", label: "제목순" },
+];
 
 // 날짜 문자열을 화면용으로 포맷합니다.
 function formatDateTime(value: string | null): string {
@@ -61,7 +84,20 @@ export default function SnippetWorkspacePage() {
 	const [selectedFolderNo, setSelectedFolderNo] = useState<number | null>(null);
 	const [selectedTagNo, setSelectedTagNo] = useState<number | null>(null);
 	const [selectedLanguageCd, setSelectedLanguageCd] = useState("");
-	const [favoriteYn, setFavoriteYn] = useState("");
+	const [includeBodyYn, setIncludeBodyYn] = useState("N");
+	const [selectedSortBy, setSelectedSortBy] = useState<SnippetSortBy>("updated_desc");
+	const [selectedQuickFilter, setSelectedQuickFilter] = useState<SnippetQuickFilter>("all");
+
+	// 목록 응답을 반영하면서 선택 상태를 가능한 범위에서 유지합니다.
+	const applyListResponse = (nextListResponse: SnippetListResponse) => {
+		setListResponse(nextListResponse);
+		setSelectedSnippetNo((previousSnippetNo) => {
+			if (previousSnippetNo !== null && nextListResponse.list.some((item) => item.snippetNo === previousSnippetNo)) {
+				return previousSnippetNo;
+			}
+			return nextListResponse.list.length > 0 ? nextListResponse.list[0].snippetNo : null;
+		});
+	};
 
 	// 페이지 진입 시 세션 복구와 bootstrap/목록 초기 조회를 수행합니다.
 	useEffect(() => {
@@ -100,11 +136,11 @@ export default function SnippetWorkspacePage() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	// 선택된 스니펫 번호가 바뀌면 상세 데이터를 다시 조회합니다.
+	// 선택된 스니펫 번호가 바뀌면 상세 데이터를 다시 조회하고 조회 이력을 남깁니다.
 	useEffect(() => {
 		let isCancelled = false;
 
-		// 현재 선택된 스니펫 상세를 조회합니다.
+		// 현재 선택된 스니펫 상세를 조회하고 조회 이력을 갱신합니다.
 		const loadDetail = async () => {
 			if (selectedSnippetNo === null) {
 				setDetail(null);
@@ -112,19 +148,47 @@ export default function SnippetWorkspacePage() {
 			}
 
 			setIsDetailLoading(true);
-			const result = await fetchSnippetDetail(selectedSnippetNo);
+			const detailResult = await fetchSnippetDetail(selectedSnippetNo);
 			if (isCancelled) {
 				return;
 			}
 
-			if (!result.ok || !result.data) {
-				setMessage(result.message || "스니펫 상세를 불러오지 못했습니다.");
+			if (!detailResult.ok || !detailResult.data) {
+				setMessage(detailResult.message || "스니펫 상세를 불러오지 못했습니다.");
 				setDetail(null);
 				setIsDetailLoading(false);
 				return;
 			}
 
-			setDetail(result.data);
+			setDetail(detailResult.data);
+
+			const viewedResult = await markSnippetViewed(selectedSnippetNo);
+			if (isCancelled) {
+				return;
+			}
+			if (!viewedResult.ok) {
+				setMessage(viewedResult.message || "조회 이력을 갱신하지 못했습니다.");
+				setIsDetailLoading(false);
+				return;
+			}
+
+			await reloadBootstrap();
+			if (isCancelled) {
+				return;
+			}
+
+			await loadSnippetList();
+			if (isCancelled) {
+				return;
+			}
+
+			const refreshedDetailResult = await fetchSnippetDetail(selectedSnippetNo);
+			if (isCancelled) {
+				return;
+			}
+			if (refreshedDetailResult.ok && refreshedDetailResult.data) {
+				setDetail(refreshedDetailResult.data);
+			}
 			setIsDetailLoading(false);
 		};
 
@@ -132,6 +196,7 @@ export default function SnippetWorkspacePage() {
 		return () => {
 			isCancelled = true;
 		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [selectedSnippetNo]);
 
 	// 현재 필터 기준으로 스니펫 목록을 다시 조회합니다.
@@ -140,7 +205,9 @@ export default function SnippetWorkspacePage() {
 		const resolvedFolderNo = Object.prototype.hasOwnProperty.call(options, "folderNo") ? options.folderNo ?? null : selectedFolderNo;
 		const resolvedTagNo = Object.prototype.hasOwnProperty.call(options, "tagNo") ? options.tagNo ?? null : selectedTagNo;
 		const resolvedLanguageCd = typeof options.languageCd === "string" ? options.languageCd : selectedLanguageCd;
-		const resolvedFavoriteYn = typeof options.favoriteYn === "string" ? options.favoriteYn : favoriteYn;
+		const resolvedIncludeBodyYn = typeof options.includeBodyYn === "string" ? options.includeBodyYn : includeBodyYn;
+		const resolvedSortBy = typeof options.sortBy === "string" ? options.sortBy : selectedSortBy;
+		const resolvedQuickFilter = typeof options.quickFilter === "string" ? options.quickFilter : selectedQuickFilter;
 
 		setIsListLoading(true);
 		const result = await fetchSnippetList({
@@ -148,7 +215,9 @@ export default function SnippetWorkspacePage() {
 			folderNo: resolvedFolderNo,
 			tagNo: resolvedTagNo,
 			languageCd: resolvedLanguageCd,
-			favoriteYn: resolvedFavoriteYn,
+			includeBodyYn: resolvedIncludeBodyYn,
+			sortBy: resolvedSortBy,
+			quickFilter: resolvedQuickFilter,
 			page: 1,
 			size: 40,
 		});
@@ -166,14 +235,7 @@ export default function SnippetWorkspacePage() {
 			return;
 		}
 
-		const resolvedListResponse = result.data;
-		setListResponse(resolvedListResponse);
-		setSelectedSnippetNo((previousSnippetNo) => {
-			if (previousSnippetNo !== null && resolvedListResponse.list.some((item) => item.snippetNo === previousSnippetNo)) {
-				return previousSnippetNo;
-			}
-			return resolvedListResponse.list.length > 0 ? resolvedListResponse.list[0].snippetNo : null;
-		});
+		applyListResponse(result.data);
 		setIsListLoading(false);
 	};
 
@@ -185,6 +247,16 @@ export default function SnippetWorkspacePage() {
 			return;
 		}
 		setBootstrap(result.data);
+	};
+
+	// 현재 선택된 스니펫 상세를 다시 읽어 상세 패널을 최신 상태로 맞춥니다.
+	const reloadDetail = async (snippetNo: number) => {
+		const result = await fetchSnippetDetail(snippetNo);
+		if (!result.ok || !result.data) {
+			setMessage(result.message || "스니펫 상세를 다시 불러오지 못했습니다.");
+			return;
+		}
+		setDetail(result.data);
 	};
 
 	// 폴더 선택 필터를 토글합니다.
@@ -207,11 +279,23 @@ export default function SnippetWorkspacePage() {
 		await loadSnippetList({ languageCd: nextLanguageCd });
 	};
 
-	// 즐겨찾기 필터를 변경합니다.
-	const handleFavoriteFilterChange = async (checked: boolean) => {
-		const nextFavoriteYn = checked ? "Y" : "";
-		setFavoriteYn(nextFavoriteYn);
-		await loadSnippetList({ favoriteYn: nextFavoriteYn });
+	// 본문 포함 검색 여부를 변경합니다.
+	const handleIncludeBodyChange = async (checked: boolean) => {
+		const nextIncludeBodyYn = checked ? "Y" : "N";
+		setIncludeBodyYn(nextIncludeBodyYn);
+		await loadSnippetList({ includeBodyYn: nextIncludeBodyYn });
+	};
+
+	// 정렬 기준을 변경합니다.
+	const handleSortChange = async (nextSortBy: SnippetSortBy) => {
+		setSelectedSortBy(nextSortBy);
+		await loadSnippetList({ sortBy: nextSortBy });
+	};
+
+	// 퀵필터를 변경합니다.
+	const handleQuickFilterChange = async (nextQuickFilter: SnippetQuickFilter) => {
+		setSelectedQuickFilter(nextQuickFilter);
+		await loadSnippetList({ quickFilter: nextQuickFilter });
 	};
 
 	// 검색 폼을 제출합니다.
@@ -226,11 +310,17 @@ export default function SnippetWorkspacePage() {
 	const handleCopySnippet = async (snippet: SnippetDetailResponse) => {
 		try {
 			await navigator.clipboard.writeText(snippet.snippetBody);
-			await requestSnippetClientApi<{ message: string }>(`/api/snippet/snippets/${snippet.snippetNo}/copied`, {
-				method: "PATCH",
-			});
+
+			const copiedResult = await markSnippetCopied(snippet.snippetNo);
+			if (!copiedResult.ok) {
+				setMessage(copiedResult.message || "복사 이력을 갱신하지 못했습니다.");
+				return;
+			}
+
 			setMessage("스니펫을 클립보드에 복사했습니다.");
+			await reloadBootstrap();
 			await loadSnippetList();
+			await reloadDetail(snippet.snippetNo);
 			setSelectedSnippetNo(snippet.snippetNo);
 		} catch {
 			setMessage("클립보드 복사에 실패했습니다.");
@@ -256,7 +346,9 @@ export default function SnippetWorkspacePage() {
 		}
 
 		setMessage("즐겨찾기 상태를 변경했습니다.");
+		await reloadBootstrap();
 		await loadSnippetList();
+		await reloadDetail(snippet.snippetNo);
 		setSelectedSnippetNo(snippet.snippetNo);
 		setIsActionPending(false);
 	};
@@ -280,6 +372,7 @@ export default function SnippetWorkspacePage() {
 
 		setMessage("스니펫을 삭제했습니다.");
 		setDetail(null);
+		await reloadBootstrap();
 		await loadSnippetList();
 		setIsActionPending(false);
 	};
@@ -390,6 +483,11 @@ export default function SnippetWorkspacePage() {
 		setIsActionPending(false);
 	};
 
+	// 최근 사용 목록에서 스니펫을 선택합니다.
+	const handleRecentSnippetSelect = (snippetNo: number) => {
+		setSelectedSnippetNo(snippetNo);
+	};
+
 	// 스니펫 로그아웃을 처리합니다.
 	const handleLogout = async () => {
 		setIsActionPending(true);
@@ -410,7 +508,7 @@ export default function SnippetWorkspacePage() {
 						<p className={styles.eyebrow}>snippet workspace</p>
 						<h1 className={styles.title}>재사용할 코드와 메모를 빠르게 찾아 다시 쓰는 개인 저장소</h1>
 						<p className={styles.description}>
-							폴더와 태그로 구조를 정리하고, 검색과 즐겨찾기로 자주 쓰는 조각을 바로 다시 가져올 수 있습니다.
+							검색 범위를 넓히고 최근 사용 흐름을 남겨, 저장한 스니펫을 더 빨리 찾고 더 자주 다시 꺼내 쓸 수 있도록 확장했습니다.
 						</p>
 					</div>
 
@@ -448,7 +546,7 @@ export default function SnippetWorkspacePage() {
 									className={`${styles.filterChip} ${selectedFolderNo === null ? styles.filterChipActive : ""}`}
 									onClick={() => void handleFolderSelect(null)}
 								>
-									전체 보기
+									<span>전체 보기</span>
 								</button>
 								<div className={styles.filterList}>
 									{bootstrap.folderList.map((folder) => (
@@ -506,45 +604,120 @@ export default function SnippetWorkspacePage() {
 									))}
 								</div>
 							</section>
+
+							<section className={styles.sidebarCard}>
+								<h2 className={styles.sidebarTitle}>최근 본 5개</h2>
+								<div className={styles.recentList}>
+									{bootstrap.recentViewedList.length > 0 ? (
+										bootstrap.recentViewedList.map((snippet) => (
+											<button
+												key={`viewed-${snippet.snippetNo}`}
+												type="button"
+												className={styles.recentItemButton}
+												onClick={() => handleRecentSnippetSelect(snippet.snippetNo)}
+											>
+												<span className={styles.recentItemTitle}>{snippet.title}</span>
+												<span className={styles.recentItemMeta}>
+													{snippet.languageNm} · {formatDateTime(snippet.lastViewedDt)}
+												</span>
+											</button>
+										))
+									) : (
+										<p className={styles.sidebarMeta}>아직 최근 조회 이력이 없습니다.</p>
+									)}
+								</div>
+							</section>
+
+							<section className={styles.sidebarCard}>
+								<h2 className={styles.sidebarTitle}>최근 복사 5개</h2>
+								<div className={styles.recentList}>
+									{bootstrap.recentCopiedList.length > 0 ? (
+										bootstrap.recentCopiedList.map((snippet) => (
+											<button
+												key={`copied-${snippet.snippetNo}`}
+												type="button"
+												className={styles.recentItemButton}
+												onClick={() => handleRecentSnippetSelect(snippet.snippetNo)}
+											>
+												<span className={styles.recentItemTitle}>{snippet.title}</span>
+												<span className={styles.recentItemMeta}>
+													{snippet.languageNm} · {formatDateTime(snippet.lastCopiedDt)}
+												</span>
+											</button>
+										))
+									) : (
+										<p className={styles.sidebarMeta}>아직 최근 복사 이력이 없습니다.</p>
+									)}
+								</div>
+							</section>
 						</aside>
 
 						<section className={styles.mainPanel}>
 							<div className={styles.toolbar}>
-								<form className={styles.searchForm} onSubmit={handleSearchSubmit}>
-									<input
-										type="search"
-										value={searchInput}
-										onChange={(event) => setSearchInput(event.target.value)}
-										placeholder="제목, 요약, 메모를 검색하세요"
-										className={styles.searchInput}
-									/>
-									<button type="submit" className={styles.searchButton}>
-										검색
-									</button>
-								</form>
-
-								<div className={styles.filterControls}>
-									<select
-										value={selectedLanguageCd}
-										onChange={(event) => void handleLanguageChange(event.target.value)}
-										className={styles.selectBox}
-									>
-										<option value="">전체 언어</option>
-										{bootstrap.languageList.map((language) => (
-											<option key={language.languageCd} value={language.languageCd}>
-												{language.languageNm}
-											</option>
-										))}
-									</select>
-
-									<label className={styles.checkboxLabel}>
+								<div className={styles.toolbarTop}>
+									<form className={styles.searchForm} onSubmit={handleSearchSubmit}>
 										<input
-											type="checkbox"
-											checked={favoriteYn === "Y"}
-											onChange={(event) => void handleFavoriteFilterChange(event.target.checked)}
+											type="search"
+											value={searchInput}
+											onChange={(event) => setSearchInput(event.target.value)}
+											placeholder="제목, 요약, 메모를 검색하세요"
+											className={styles.searchInput}
 										/>
-										즐겨찾기만
-									</label>
+										<button type="submit" className={styles.searchButton}>
+											검색
+										</button>
+									</form>
+
+									<div className={styles.filterControls}>
+										<select
+											value={selectedLanguageCd}
+											onChange={(event) => void handleLanguageChange(event.target.value)}
+											className={styles.selectBox}
+										>
+											<option value="">전체 언어</option>
+											{bootstrap.languageList.map((language) => (
+												<option key={language.languageCd} value={language.languageCd}>
+													{language.languageNm}
+												</option>
+											))}
+										</select>
+
+										<select
+											value={selectedSortBy}
+											onChange={(event) => void handleSortChange(event.target.value as SnippetSortBy)}
+											className={styles.selectBox}
+										>
+											{SORT_OPTION_LIST.map((sortOption) => (
+												<option key={sortOption.value} value={sortOption.value}>
+													{sortOption.label}
+												</option>
+											))}
+										</select>
+
+										<label className={styles.checkboxLabel}>
+											<input
+												type="checkbox"
+												checked={includeBodyYn === "Y"}
+												onChange={(event) => void handleIncludeBodyChange(event.target.checked)}
+											/>
+											본문 포함 검색
+										</label>
+									</div>
+								</div>
+
+								<div className={styles.quickFilterList}>
+									{QUICK_FILTER_OPTION_LIST.map((quickFilterOption) => (
+										<button
+											key={quickFilterOption.value}
+											type="button"
+											className={`${styles.quickFilterButton} ${
+												selectedQuickFilter === quickFilterOption.value ? styles.quickFilterButtonActive : ""
+											}`}
+											onClick={() => void handleQuickFilterChange(quickFilterOption.value)}
+										>
+											{quickFilterOption.label}
+										</button>
+									))}
 								</div>
 							</div>
 
@@ -568,11 +741,18 @@ export default function SnippetWorkspacePage() {
 												>
 													<div className={styles.snippetCardHeader}>
 														<span className={styles.languageBadge}>{snippet.languageNm}</span>
-														<span className={styles.favoriteMark}>{snippet.favoriteYn === "Y" ? "★" : "☆"}</span>
+														<div className={styles.snippetStatusGroup}>
+															{snippet.duplicateYn === "Y" ? <span className={styles.duplicateBadge}>중복 후보</span> : null}
+															<span className={styles.favoriteMark}>{snippet.favoriteYn === "Y" ? "★" : "☆"}</span>
+														</div>
 													</div>
 													<h3 className={styles.snippetTitle}>{snippet.title}</h3>
 													<p className={styles.snippetSummary}>{snippet.summary || "요약 없음"}</p>
-													<p className={styles.snippetMetaLine}>{snippet.folderNm || "무폴더"} · {formatDateTime(snippet.udtDt || snippet.regDt)}</p>
+													<p className={styles.snippetMetaLine}>{snippet.folderNm || "무폴더"} · 수정 {formatDateTime(snippet.udtDt || snippet.regDt)}</p>
+													<p className={styles.snippetStatsLine}>조회 {snippet.viewCnt} · 복사 {snippet.copyCnt}</p>
+													<p className={styles.snippetMetaLine}>
+														최근 조회 {formatDateTime(snippet.lastViewedDt)} · 최근 복사 {formatDateTime(snippet.lastCopiedDt)}
+													</p>
 													{snippet.tagNameText ? <p className={styles.snippetTagText}>{snippet.tagNameText}</p> : null}
 												</button>
 											))
@@ -598,7 +778,10 @@ export default function SnippetWorkspacePage() {
 											<div className={styles.detailTop}>
 												<div>
 													<p className={styles.detailLanguage}>{detail.languageCd}</p>
-													<h3 className={styles.detailTitle}>{detail.title}</h3>
+													<div className={styles.detailTitleRow}>
+														<h3 className={styles.detailTitle}>{detail.title}</h3>
+														{detail.duplicateYn === "Y" ? <span className={styles.duplicateBadge}>중복 후보</span> : null}
+													</div>
 													<p className={styles.detailSummary}>{detail.summary || "요약이 없습니다."}</p>
 												</div>
 
@@ -630,6 +813,25 @@ export default function SnippetWorkspacePage() {
 													>
 														삭제
 													</button>
+												</div>
+											</div>
+
+											<div className={styles.detailInfoGrid}>
+												<div className={styles.detailInfoCard}>
+													<span className={styles.detailInfoLabel}>조회 수</span>
+													<strong className={styles.detailInfoValue}>{detail.viewCnt}</strong>
+												</div>
+												<div className={styles.detailInfoCard}>
+													<span className={styles.detailInfoLabel}>복사 수</span>
+													<strong className={styles.detailInfoValue}>{detail.copyCnt}</strong>
+												</div>
+												<div className={styles.detailInfoCard}>
+													<span className={styles.detailInfoLabel}>마지막 조회</span>
+													<strong className={styles.detailInfoValue}>{formatDateTime(detail.lastViewedDt)}</strong>
+												</div>
+												<div className={styles.detailInfoCard}>
+													<span className={styles.detailInfoLabel}>마지막 복사</span>
+													<strong className={styles.detailInfoValue}>{formatDateTime(detail.lastCopiedDt)}</strong>
 												</div>
 											</div>
 

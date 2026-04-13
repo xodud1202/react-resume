@@ -24,6 +24,16 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: 빌드 환경 파일 생성
+        run: |
+          if [ -z "${{ secrets.REACT_RESUME_NEXT_PUBLIC_GOOGLE_CLIENT_ID }}" ]; then
+            echo "REACT_RESUME_NEXT_PUBLIC_GOOGLE_CLIENT_ID secret is required."
+            exit 1
+          fi
+          cat <<EOF > .env.production
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ secrets.REACT_RESUME_NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
+          EOF
+
       - name: 의존성 설치
         run: npm ci
 

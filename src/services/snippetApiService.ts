@@ -66,6 +66,8 @@ export interface SnippetBootstrapResponse {
 	languageList: SnippetLanguage[];
 	folderList: SnippetFolder[];
 	tagList: SnippetTag[];
+	recentViewedList: SnippetSummary[];
+	recentCopiedList: SnippetSummary[];
 }
 
 export interface SnippetSummary {
@@ -78,7 +80,11 @@ export interface SnippetSummary {
 	folderNo: number | null;
 	folderNm: string | null;
 	tagNameText: string | null;
+	viewCnt: number;
+	copyCnt: number;
+	lastViewedDt: string | null;
 	lastCopiedDt: string | null;
+	duplicateYn: string;
 	regDt: string;
 	udtDt: string | null;
 }
@@ -99,7 +105,11 @@ export interface SnippetDetailResponse {
 	snippetBody: string;
 	memo: string | null;
 	favoriteYn: string;
+	viewCnt: number;
+	copyCnt: number;
+	lastViewedDt: string | null;
 	lastCopiedDt: string | null;
+	duplicateYn: string;
 	regDt: string;
 	udtDt: string | null;
 	tagNoList: number[];
@@ -139,8 +149,36 @@ export interface SnippetListFilter {
 	tagNo?: number | null;
 	languageCd?: string;
 	favoriteYn?: string;
+	includeBodyYn?: string;
+	sortBy?: string;
+	quickFilter?: string;
 	page?: number;
 	size?: number;
+}
+
+// 배열 응답을 안전하게 정규화합니다.
+function resolveArrayValue<T>(value: T[] | undefined | null): T[] {
+	return Array.isArray(value) ? value : [];
+}
+
+// bootstrap 응답에서 배열 필드를 안전하게 정규화합니다.
+function normalizeSnippetBootstrapResponse(data: SnippetBootstrapResponse): SnippetBootstrapResponse {
+	return {
+		...data,
+		languageList: resolveArrayValue(data.languageList),
+		folderList: resolveArrayValue(data.folderList),
+		tagList: resolveArrayValue(data.tagList),
+		recentViewedList: resolveArrayValue(data.recentViewedList),
+		recentCopiedList: resolveArrayValue(data.recentCopiedList),
+	};
+}
+
+// 상세 응답에서 배열 필드를 안전하게 정규화합니다.
+function normalizeSnippetDetailResponse(data: SnippetDetailResponse): SnippetDetailResponse {
+	return {
+		...data,
+		tagNoList: resolveArrayValue(data.tagNoList),
+	};
 }
 
 // 클라이언트 응답 payload에서 message 문자열을 안전하게 추출합니다.
@@ -194,6 +232,15 @@ function toQueryString(filter: SnippetListFilter): string {
 	}
 	if (typeof filter.favoriteYn === "string" && filter.favoriteYn.trim() !== "") {
 		searchParams.set("favoriteYn", filter.favoriteYn.trim());
+	}
+	if (typeof filter.includeBodyYn === "string" && filter.includeBodyYn.trim() !== "") {
+		searchParams.set("includeBodyYn", filter.includeBodyYn.trim());
+	}
+	if (typeof filter.sortBy === "string" && filter.sortBy.trim() !== "") {
+		searchParams.set("sortBy", filter.sortBy.trim());
+	}
+	if (typeof filter.quickFilter === "string" && filter.quickFilter.trim() !== "") {
+		searchParams.set("quickFilter", filter.quickFilter.trim());
 	}
 	if (typeof filter.page === "number" && filter.page > 0) {
 		searchParams.set("page", String(filter.page));
@@ -258,7 +305,14 @@ export async function logoutSnippet(): Promise<SnippetClientApiResult<{ message:
 
 // 스니펫 bootstrap 데이터를 조회합니다.
 export async function fetchSnippetBootstrap(): Promise<SnippetClientApiResult<SnippetBootstrapResponse>> {
-	return requestSnippetClientApi<SnippetBootstrapResponse>("/api/snippet/bootstrap");
+	const result = await requestSnippetClientApi<SnippetBootstrapResponse>("/api/snippet/bootstrap");
+	if (!result.ok || !result.data) {
+		return result;
+	}
+	return {
+		...result,
+		data: normalizeSnippetBootstrapResponse(result.data),
+	};
 }
 
 // 스니펫 목록을 조회합니다.
@@ -268,5 +322,26 @@ export async function fetchSnippetList(filter: SnippetListFilter): Promise<Snipp
 
 // 스니펫 상세를 조회합니다.
 export async function fetchSnippetDetail(snippetNo: number): Promise<SnippetClientApiResult<SnippetDetailResponse>> {
-	return requestSnippetClientApi<SnippetDetailResponse>(`/api/snippet/snippets/${snippetNo}`);
+	const result = await requestSnippetClientApi<SnippetDetailResponse>(`/api/snippet/snippets/${snippetNo}`);
+	if (!result.ok || !result.data) {
+		return result;
+	}
+	return {
+		...result,
+		data: normalizeSnippetDetailResponse(result.data),
+	};
+}
+
+// 스니펫 복사 이력을 갱신합니다.
+export async function markSnippetCopied(snippetNo: number): Promise<SnippetClientApiResult<{ message: string }>> {
+	return requestSnippetClientApi<{ message: string }>(`/api/snippet/snippets/${snippetNo}/copied`, {
+		method: "PATCH",
+	});
+}
+
+// 스니펫 조회 이력을 갱신합니다.
+export async function markSnippetViewed(snippetNo: number): Promise<SnippetClientApiResult<{ message: string }>> {
+	return requestSnippetClientApi<{ message: string }>(`/api/snippet/snippets/${snippetNo}/viewed`, {
+		method: "PATCH",
+	});
 }
