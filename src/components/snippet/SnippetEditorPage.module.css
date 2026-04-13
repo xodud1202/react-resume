@@ -13,6 +13,19 @@
 	color: var(--snippet-ink);
 }
 
+.editorShell {
+	display: grid;
+	gap: 1rem;
+}
+
+.embeddedEditorShell {
+	display: grid;
+	grid-template-rows: auto auto minmax(0, 1fr);
+	gap: 0.85rem;
+	height: min(84vh, 980px);
+	min-height: 0;
+}
+
 .header {
 	display: flex;
 	justify-content: space-between;
@@ -20,6 +33,13 @@
 	gap: 1rem;
 	max-width: 1440px;
 	margin: 0 auto 1.25rem;
+}
+
+.embeddedEditorHeader {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 1rem;
 }
 
 .eyebrow,
@@ -53,12 +73,14 @@
 }
 
 .primaryButton,
-.secondaryLink {
+.secondaryLink,
+.secondaryButton,
+.closeIconButton {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
 	padding: 0.9rem 1.2rem;
-	border-radius: 999px;
+	border-radius: 3px;
 	font-weight: 700;
 	text-decoration: none;
 	cursor: pointer;
@@ -76,6 +98,27 @@
 	color: var(--snippet-ink);
 }
 
+.secondaryButton {
+	border: 1px solid var(--snippet-border);
+	background: rgba(255, 255, 255, 0.76);
+	color: var(--snippet-ink);
+}
+
+.closeIconButton {
+	width: 2.45rem;
+	height: 2.45rem;
+	padding: 0;
+	border: 1px solid rgba(25, 34, 49, 0.16);
+	background: rgba(255, 255, 255, 0.9);
+	color: var(--snippet-ink);
+	font-size: 1.22rem;
+	line-height: 1;
+}
+
+.closeIconButton:hover:not(:disabled) {
+	background: rgba(25, 34, 49, 0.06);
+}
+
 .messageBar,
 .loadingText,
 .editorLoading {
@@ -87,6 +130,13 @@
 	border: 1px solid var(--snippet-border);
 }
 
+.embeddedEditorShell .messageBar,
+.embeddedEditorShell .loadingText,
+.embeddedEditorShell .editorLoading {
+	max-width: none;
+	margin: 0;
+}
+
 .editorLayout {
 	display: grid;
 	grid-template-columns: minmax(0, 1.2fr) 280px;
@@ -95,16 +145,62 @@
 	margin: 0 auto;
 }
 
+.embeddedEditorLayout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	min-height: 0;
+	overflow: hidden;
+}
+
+.embeddedSaveButton {
+	min-width: 10.5rem;
+	min-height: 3rem;
+	padding: 0 1.3rem;
+	background: linear-gradient(180deg, #111827 0%, #000000 100%);
+	box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
+}
+
 .formPanel,
 .sideCard {
-	border: 1px solid var(--snippet-border);
-	border-radius: 1.35rem;
+	border: 1px solid rgba(25, 34, 49, 0.12);
+	border-radius: 3px;
 	background: var(--snippet-panel);
-	box-shadow: 0 18px 48px rgba(25, 34, 49, 0.08);
+	box-shadow: 0 16px 36px rgba(25, 34, 49, 0.08);
 }
 
 .formPanel {
 	padding: 1.2rem;
+}
+
+.formScrollBody {
+	display: grid;
+}
+
+.embeddedEditorLayout .formPanel {
+	min-height: 0;
+}
+
+.embeddedFormPanel {
+	display: grid;
+	grid-template-rows: minmax(0, 1fr) auto;
+	padding: 0;
+	overflow: hidden;
+}
+
+.embeddedFormScrollBody {
+	min-height: 0;
+	overflow: auto;
+	padding: 1.2rem;
+}
+
+.formActionFooter {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	flex: 0 0 auto;
+	padding: 0.95rem 1.2rem 1.1rem;
+	border-top: 1px solid rgba(25, 34, 49, 0.1);
+	background: rgba(255, 255, 255, 0.94);
 }
 
 .formGrid {
@@ -133,14 +229,17 @@
 .selectBox,
 .textArea,
 .memoArea {
-	border: 1px solid var(--snippet-border);
-	border-radius: 1rem;
-	background: rgba(255, 255, 255, 0.88);
+	width: 100%;
+	border: 1px solid rgba(25, 34, 49, 0.18);
+	border-radius: 3px;
+	background: #ffffff;
 	color: var(--snippet-ink);
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
 .textInput,
 .selectBox {
+	min-height: 3rem;
 	padding: 0.9rem 1rem;
 }
 
@@ -150,6 +249,16 @@
 	padding: 0.95rem 1rem;
 	line-height: 1.7;
 	resize: vertical;
+}
+
+.textInput:focus,
+.selectBox:focus,
+.textArea:focus,
+.memoArea:focus {
+	border-color: rgba(25, 34, 49, 0.32);
+	outline: 2px solid rgba(25, 34, 49, 0.08);
+	outline-offset: 0;
+	box-shadow: 0 0 0 3px rgba(25, 34, 49, 0.04);
 }
 
 .checkboxField {
@@ -178,7 +287,7 @@
 	align-items: center;
 	gap: 0.45rem;
 	padding: 0.65rem 0.8rem;
-	border: 1px solid var(--snippet-border);
+	border: 1px solid rgba(25, 34, 49, 0.12);
 	border-radius: 999px;
 	background: rgba(255, 255, 255, 0.72);
 }
@@ -222,7 +331,8 @@
 		grid-template-columns: 1fr;
 	}
 
-	.header {
+	.header,
+	.embeddedEditorHeader {
 		flex-direction: column;
 	}
 }

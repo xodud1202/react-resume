@@ -65,6 +65,29 @@
 	transform: translate(-50%, -50%);
 }
 
+.editorModalOverlay {
+	position: fixed;
+	inset: 0;
+	z-index: 40;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1rem;
+	background: rgba(15, 23, 42, 0.48);
+	backdrop-filter: blur(4px);
+}
+
+.editorModalDialog {
+	width: min(1120px, calc(100vw - 2rem));
+	max-height: calc(100vh - 2rem);
+	padding: 1rem;
+	border: 1px solid var(--panel-border-strong);
+	border-radius: var(--radius);
+	background: var(--panel-bg-strong);
+	box-shadow: 0 28px 64px rgba(15, 23, 42, 0.24);
+	overflow: hidden;
+}
+
 .workspaceShell {
 	display: grid;
 	grid-template-columns: 352px minmax(0, 1fr);
@@ -113,6 +136,7 @@
 .listCard {
 	grid-template-rows: auto minmax(0, 1fr);
 	overflow: hidden;
+	gap: unset;
 }
 
 .searchCardActionRow,
@@ -938,6 +962,16 @@
 
 @media (max-width: 880px) {
 	.pageShell {
+		padding: 0.7rem;
+	}
+
+	.editorModalOverlay {
+		padding: 0.55rem;
+	}
+
+	.editorModalDialog {
+		width: calc(100vw - 1.1rem);
+		max-height: calc(100vh - 1.1rem);
 		padding: 0.7rem;
 	}
 

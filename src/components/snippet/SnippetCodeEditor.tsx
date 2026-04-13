@@ -7,6 +7,7 @@ import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
 import { markdown } from "@codemirror/lang-markdown";
 import { sql } from "@codemirror/lang-sql";
+import styles from "./SnippetCodeEditor.module.css";
 
 interface SnippetCodeEditorProps {
 	value: string;
@@ -42,6 +43,7 @@ function resolveLanguageExtensions(languageCd: string) {
 export default function SnippetCodeEditor({ value, languageCd, onChange }: SnippetCodeEditorProps) {
 	return (
 		<CodeMirror
+			className={styles.editorWrapper}
 			value={value}
 			height="520px"
 			theme={githubLight}

@@ -1,5 +1,4 @@
 import Head from "next/head";
-import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
 import {
@@ -16,9 +15,11 @@ import {
 	type SnippetFolder,
 	type SnippetLanguage,
 	type SnippetListResponse,
+	type SnippetSaveResponse,
 	type SnippetSummary,
 	type SnippetTag,
 } from "@/services/snippetApiService";
+import SnippetEditorForm, { type SnippetEditorMode } from "./SnippetEditorForm";
 import styles from "./SnippetWorkspacePage.module.css";
 
 type SnippetQuickFilter = "all" | "favorite" | "duplicate";
@@ -93,6 +94,10 @@ export default function SnippetWorkspacePage() {
 	const [selectedSortBy, setSelectedSortBy] = useState<SnippetSortBy>("created_desc");
 	const [selectedQuickFilter, setSelectedQuickFilter] = useState<SnippetQuickFilter>("all");
 	const [openRecentPanel, setOpenRecentPanel] = useState<RecentPanelType>(null);
+	const [editorModalOpen, setEditorModalOpen] = useState(false);
+	const [editorMode, setEditorMode] = useState<SnippetEditorMode>("create");
+	const [editingSnippetNo, setEditingSnippetNo] = useState<number | null>(null);
+	const [isEditorModalSaving, setIsEditorModalSaving] = useState(false);
 
 	// 중앙 알림 토스트 타이머를 정리합니다.
 	const clearFeedbackToastTimer = () => {
@@ -130,6 +135,29 @@ export default function SnippetWorkspacePage() {
 			clearFeedbackToastTimer();
 		};
 	}, []);
+
+	// 편집 모달이 열리면 body 스크롤을 잠그고 ESC 닫기를 처리합니다.
+	useEffect(() => {
+		if (!editorModalOpen) {
+			return;
+		}
+
+		const previousOverflow = document.body.style.overflow;
+		const handleWindowKeyDown = (event: KeyboardEvent) => {
+			// 저장 중이 아닐 때만 ESC로 모달을 닫습니다.
+			if (event.key === "Escape" && !isEditorModalSaving) {
+				setEditorModalOpen(false);
+				setEditingSnippetNo(null);
+			}
+		};
+
+		document.body.style.overflow = "hidden";
+		window.addEventListener("keydown", handleWindowKeyDown);
+		return () => {
+			document.body.style.overflow = previousOverflow;
+			window.removeEventListener("keydown", handleWindowKeyDown);
+		};
+	}, [editorModalOpen, isEditorModalSaving]);
 
 	// 바깥 영역을 클릭하면 최근 사용 패널을 닫습니다.
 	useEffect(() => {
@@ -360,6 +388,42 @@ export default function SnippetWorkspacePage() {
 		const nextKeyword = searchInput.trim();
 		setSearchKeyword(nextKeyword);
 		await loadSnippetList({ q: nextKeyword });
+	};
+
+	// 신규 스니펫 등록 모달을 엽니다.
+	const handleOpenCreateEditor = () => {
+		setEditorMode("create");
+		setEditingSnippetNo(null);
+		setEditorModalOpen(true);
+	};
+
+	// 기존 스니펫 수정 모달을 엽니다.
+	const handleOpenEditEditor = (snippetNo: number) => {
+		setEditorMode("edit");
+		setEditingSnippetNo(snippetNo);
+		setEditorModalOpen(true);
+	};
+
+	// 저장 중이 아닐 때 편집 모달을 닫습니다.
+	const handleCloseEditorModal = () => {
+		if (isEditorModalSaving) {
+			return;
+		}
+		setEditorModalOpen(false);
+		setEditingSnippetNo(null);
+	};
+
+	// 모달 저장 성공 후 목록/상세/보조 데이터를 다시 동기화합니다.
+	const handleEditorSaved = async (response: SnippetSaveResponse) => {
+		setEditorModalOpen(false);
+		setEditingSnippetNo(null);
+		setIsEditorModalSaving(false);
+		setMessage("");
+		showFeedbackToast(response.message);
+		await reloadBootstrap();
+		await loadSnippetList();
+		setSelectedSnippetNo(response.snippetNo);
+		await reloadDetail(response.snippetNo);
 	};
 
 	// 최근 사용 패널을 토글합니다.
@@ -640,6 +704,27 @@ export default function SnippetWorkspacePage() {
 				<div className={`${styles.feedbackToast} ${isFeedbackToastVisible ? styles.feedbackToastVisible : ""}`} aria-live="polite">
 					{feedbackToastMessage}
 				</div>
+				{editorModalOpen && bootstrap ? (
+					<div className={styles.editorModalOverlay} onClick={handleCloseEditorModal}>
+						<div
+							className={styles.editorModalDialog}
+							role="dialog"
+							aria-modal="true"
+							aria-label={editorMode === "create" ? "새 스니펫 작성" : "스니펫 수정"}
+							onClick={(event) => event.stopPropagation()}
+						>
+							<SnippetEditorForm
+								mode={editorMode}
+								snippetNo={editingSnippetNo}
+								bootstrap={bootstrap}
+								embedded
+								onClose={handleCloseEditorModal}
+								onSaved={handleEditorSaved}
+								onSavingChange={setIsEditorModalSaving}
+							/>
+						</div>
+					</div>
+				) : null}
 				{isInitializing ? <p className={styles.loadingText}>작업 화면을 준비하고 있습니다.</p> : null}
 
 				{!isInitializing && bootstrap ? (
@@ -792,15 +877,15 @@ export default function SnippetWorkspacePage() {
 											))}
 										</div>
 									) : (
-										<div className={styles.emptyState}>
-											<p>조건에 맞는 스니펫이 없습니다.</p>
-											<Link href="/snippet/edit/new" className={styles.emptyLink}>
-												첫 스니펫 작성하기
-											</Link>
-										</div>
-									)}
-								</div>
-							</section>
+											<div className={styles.emptyState}>
+												<p>조건에 맞는 스니펫이 없습니다.</p>
+												<button type="button" className={styles.emptyLink} onClick={handleOpenCreateEditor}>
+													첫 스니펫 작성하기
+												</button>
+											</div>
+										)}
+									</div>
+								</section>
 
 							<button type="button" className={styles.logoutButton} onClick={handleLogout} disabled={isActionPending}>
 								로그아웃
@@ -846,9 +931,9 @@ export default function SnippetWorkspacePage() {
 										))}
 									</div>
 									<div className={styles.filterRailTopActions}>
-										<Link href="/snippet/edit/new" className={styles.primaryAction}>
+										<button type="button" className={styles.primaryAction} onClick={handleOpenCreateEditor}>
 											새 스니펫
-										</Link>
+										</button>
 									</div>
 								</section>
 
@@ -960,9 +1045,13 @@ export default function SnippetWorkspacePage() {
 												</div>
 
 												<div className={styles.detailActionRow}>
-													<Link href={`/snippet/edit/${detail.snippetNo}`} className={styles.detailActionLink}>
+													<button
+														type="button"
+														className={styles.detailActionButton}
+														onClick={() => handleOpenEditEditor(detail.snippetNo)}
+													>
 														수정
-													</Link>
+													</button>
 													<button
 														type="button"
 														className={styles.detailDangerButton}
