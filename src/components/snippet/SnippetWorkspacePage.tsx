@@ -657,17 +657,14 @@ export default function SnippetWorkspacePage() {
 									<button type="submit" className={styles.searchButton}>
 										검색
 									</button>
-
-									<div className={styles.searchOptionRow}>
-										<label className={styles.checkboxLabel}>
-											<input
-												type="checkbox"
-												checked={includeBodyYn === "Y"}
-												onChange={(event) => void handleIncludeBodyChange(event.target.checked)}
-											/>
-											본문 포함 검색
-										</label>
-									</div>
+									<label className={styles.checkboxLabel}>
+										<input
+											type="checkbox"
+											checked={includeBodyYn === "Y"}
+											onChange={(event) => void handleIncludeBodyChange(event.target.checked)}
+										/>
+										본문 포함 검색
+									</label>
 								</form>
 
 								<div className={styles.quickActionBlock} ref={recentPanelRef}>
