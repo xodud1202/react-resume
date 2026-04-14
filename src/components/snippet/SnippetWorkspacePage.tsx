@@ -1,6 +1,7 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { useEffect, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import {
 	fetchSnippetBootstrap,
 	fetchSnippetDetail,
@@ -20,11 +21,11 @@ import {
 	type SnippetTag,
 } from "@/services/snippetApiService";
 import SnippetEditorForm, { type SnippetEditorMode } from "./SnippetEditorForm";
+import { filterTagSuggestionList, findMatchedTag, normalizeTagSearchKey } from "./snippetTagSearchUtils";
 import styles from "./SnippetWorkspacePage.module.css";
 
-type SnippetQuickFilter = "all" | "favorite" | "duplicate";
+type SnippetQuickFilter = "all" | "favorite" | "duplicate" | "recent_viewed" | "recent_copied";
 type SnippetSortBy = "created_desc" | "updated_desc" | "viewed_desc" | "copied_desc" | "copy_count_desc" | "title_asc";
-type RecentPanelType = "viewed" | "copied" | null;
 
 interface SnippetListReloadOptions {
 	q?: string;
@@ -36,10 +37,18 @@ interface SnippetListReloadOptions {
 	quickFilter?: SnippetQuickFilter;
 }
 
+interface OverlayPosition {
+	top: number;
+	left: number;
+	width: number;
+}
+
 const QUICK_FILTER_OPTION_LIST: Array<{ value: SnippetQuickFilter; label: string }> = [
 	{ value: "all", label: "전체" },
 	{ value: "favorite", label: "즐겨찾기" },
 	{ value: "duplicate", label: "중복 후보" },
+	{ value: "recent_viewed", label: "최근 본" },
+	{ value: "recent_copied", label: "최근 복사" },
 ];
 
 const SORT_OPTION_LIST: Array<{ value: SnippetSortBy; label: string }> = [
@@ -73,7 +82,16 @@ function CopyIcon() {
 export default function SnippetWorkspacePage() {
 	const router = useRouter();
 	const feedbackToastTimerRef = useRef<number | null>(null);
-	const recentPanelRef = useRef<HTMLDivElement | null>(null);
+	const topFilterScrollerRef = useRef<HTMLDivElement | null>(null);
+	const folderSelectRef = useRef<HTMLDivElement | null>(null);
+	const languageSelectRef = useRef<HTMLDivElement | null>(null);
+	const tagFilterRef = useRef<HTMLDivElement | null>(null);
+	const folderTriggerRef = useRef<HTMLButtonElement | null>(null);
+	const languageTriggerRef = useRef<HTMLButtonElement | null>(null);
+	const tagSearchShellRef = useRef<HTMLDivElement | null>(null);
+	const folderMenuRef = useRef<HTMLDivElement | null>(null);
+	const languageMenuRef = useRef<HTMLDivElement | null>(null);
+	const tagSuggestionPanelRef = useRef<HTMLDivElement | null>(null);
 	const [isInitializing, setIsInitializing] = useState(true);
 	const [isListLoading, setIsListLoading] = useState(false);
 	const [isActionPending, setIsActionPending] = useState(false);
@@ -93,7 +111,13 @@ export default function SnippetWorkspacePage() {
 	const [includeBodyYn, setIncludeBodyYn] = useState("N");
 	const [selectedSortBy, setSelectedSortBy] = useState<SnippetSortBy>("created_desc");
 	const [selectedQuickFilter, setSelectedQuickFilter] = useState<SnippetQuickFilter>("all");
-	const [openRecentPanel, setOpenRecentPanel] = useState<RecentPanelType>(null);
+	const [isFolderSelectOpen, setIsFolderSelectOpen] = useState(false);
+	const [isLanguageSelectOpen, setIsLanguageSelectOpen] = useState(false);
+	const [tagSearchInput, setTagSearchInput] = useState("");
+	const [isTagSuggestionOpen, setIsTagSuggestionOpen] = useState(false);
+	const [folderMenuPosition, setFolderMenuPosition] = useState<OverlayPosition | null>(null);
+	const [languageMenuPosition, setLanguageMenuPosition] = useState<OverlayPosition | null>(null);
+	const [tagSuggestionPosition, setTagSuggestionPosition] = useState<OverlayPosition | null>(null);
 	const [editorModalOpen, setEditorModalOpen] = useState(false);
 	const [editorMode, setEditorMode] = useState<SnippetEditorMode>("create");
 	const [editingSnippetNo, setEditingSnippetNo] = useState<number | null>(null);
@@ -118,6 +142,32 @@ export default function SnippetWorkspacePage() {
 		}, 1450);
 	};
 
+	// 상단 필터 드롭다운과 추천 패널을 한 번에 닫습니다.
+	const closeTopFilterOverlay = () => {
+		setIsFolderSelectOpen(false);
+		setIsLanguageSelectOpen(false);
+		setIsTagSuggestionOpen(false);
+		setFolderMenuPosition(null);
+		setLanguageMenuPosition(null);
+		setTagSuggestionPosition(null);
+	};
+
+	// 트리거 요소 기준으로 오버레이 메뉴 위치를 계산합니다.
+	const resolveOverlayPosition = (anchorElement: HTMLElement | null, minimumWidth: number): OverlayPosition | null => {
+		if (!anchorElement || typeof window === "undefined") {
+			return null;
+		}
+
+		const anchorRect = anchorElement.getBoundingClientRect();
+		const resolvedWidth = Math.max(anchorRect.width, minimumWidth);
+		const maxLeft = Math.max(12, window.innerWidth - resolvedWidth - 12);
+		return {
+			top: anchorRect.bottom + 6,
+			left: Math.min(Math.max(12, anchorRect.left), maxLeft),
+			width: resolvedWidth,
+		};
+	};
+
 	// 목록 응답을 반영하면서 선택 상태를 가능한 범위에서 유지합니다.
 	const applyListResponse = (nextListResponse: SnippetListResponse) => {
 		setListResponse(nextListResponse);
@@ -135,6 +185,82 @@ export default function SnippetWorkspacePage() {
 			clearFeedbackToastTimer();
 		};
 	}, []);
+
+	// 상단 필터 바깥 클릭과 ESC 입력으로 열린 패널을 닫습니다.
+	useEffect(() => {
+		const handleDocumentMouseDown = (event: MouseEvent) => {
+			const targetNode = event.target as Node;
+			if (folderSelectRef.current?.contains(targetNode)) {
+				return;
+			}
+			if (languageSelectRef.current?.contains(targetNode)) {
+				return;
+			}
+			if (tagFilterRef.current?.contains(targetNode)) {
+				return;
+			}
+			if (folderMenuRef.current?.contains(targetNode)) {
+				return;
+			}
+			if (languageMenuRef.current?.contains(targetNode)) {
+				return;
+			}
+			if (tagSuggestionPanelRef.current?.contains(targetNode)) {
+				return;
+			}
+			setIsFolderSelectOpen(false);
+			setIsLanguageSelectOpen(false);
+			setIsTagSuggestionOpen(false);
+			setFolderMenuPosition(null);
+			setLanguageMenuPosition(null);
+			setTagSuggestionPosition(null);
+		};
+
+		const handleWindowKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				setIsFolderSelectOpen(false);
+				setIsLanguageSelectOpen(false);
+				setIsTagSuggestionOpen(false);
+			}
+		};
+
+		document.addEventListener("mousedown", handleDocumentMouseDown);
+		window.addEventListener("keydown", handleWindowKeyDown);
+		return () => {
+			document.removeEventListener("mousedown", handleDocumentMouseDown);
+			window.removeEventListener("keydown", handleWindowKeyDown);
+		};
+	}, []);
+
+	// 열린 상단 오버레이의 위치를 스크롤과 리사이즈에 맞춰 갱신합니다.
+	useEffect(() => {
+		if (!isFolderSelectOpen && !isLanguageSelectOpen && !isTagSuggestionOpen) {
+			return;
+		}
+
+		const updateOverlayPosition = () => {
+			if (isFolderSelectOpen) {
+				setFolderMenuPosition(resolveOverlayPosition(folderTriggerRef.current, 220));
+			}
+			if (isLanguageSelectOpen) {
+				setLanguageMenuPosition(resolveOverlayPosition(languageTriggerRef.current, 220));
+			}
+			if (isTagSuggestionOpen && normalizeTagSearchKey(tagSearchInput) !== "") {
+				setTagSuggestionPosition(resolveOverlayPosition(tagSearchShellRef.current, 260));
+			}
+		};
+
+		updateOverlayPosition();
+		const filterScroller = topFilterScrollerRef.current;
+		window.addEventListener("resize", updateOverlayPosition);
+		window.addEventListener("scroll", updateOverlayPosition, true);
+		filterScroller?.addEventListener("scroll", updateOverlayPosition);
+		return () => {
+			window.removeEventListener("resize", updateOverlayPosition);
+			window.removeEventListener("scroll", updateOverlayPosition, true);
+			filterScroller?.removeEventListener("scroll", updateOverlayPosition);
+		};
+	}, [isFolderSelectOpen, isLanguageSelectOpen, isTagSuggestionOpen, tagSearchInput]);
 
 	// 편집 모달이 열리면 body 스크롤을 잠그고 ESC 닫기를 처리합니다.
 	useEffect(() => {
@@ -158,24 +284,6 @@ export default function SnippetWorkspacePage() {
 			window.removeEventListener("keydown", handleWindowKeyDown);
 		};
 	}, [editorModalOpen, isEditorModalSaving]);
-
-	// 바깥 영역을 클릭하면 최근 사용 패널을 닫습니다.
-	useEffect(() => {
-		const handleDocumentMouseDown = (event: MouseEvent) => {
-			if (!recentPanelRef.current) {
-				return;
-			}
-
-			if (!recentPanelRef.current.contains(event.target as Node)) {
-				setOpenRecentPanel(null);
-			}
-		};
-
-		document.addEventListener("mousedown", handleDocumentMouseDown);
-		return () => {
-			document.removeEventListener("mousedown", handleDocumentMouseDown);
-		};
-	}, []);
 
 	// 선택 스니펫이 바뀌면 코드 hover 상태를 초기화합니다.
 	useEffect(() => {
@@ -342,24 +450,59 @@ export default function SnippetWorkspacePage() {
 		setDetail(result.data);
 	};
 
-	// 폴더 선택 필터를 토글합니다.
+	// 폴더 필터를 지정한 값으로 변경합니다.
 	const handleFolderSelect = async (folderNo: number | null) => {
-		const nextFolderNo = selectedFolderNo === folderNo ? null : folderNo;
-		setSelectedFolderNo(nextFolderNo);
-		await loadSnippetList({ folderNo: nextFolderNo });
+		closeTopFilterOverlay();
+		setSelectedFolderNo(folderNo);
+		await loadSnippetList({ folderNo });
 	};
 
-	// 태그 선택 필터를 토글합니다.
+	// 태그 필터를 지정한 값으로 변경합니다.
 	const handleTagSelect = async (tagNo: number | null) => {
-		const nextTagNo = selectedTagNo === tagNo ? null : tagNo;
-		setSelectedTagNo(nextTagNo);
-		await loadSnippetList({ tagNo: nextTagNo });
+		closeTopFilterOverlay();
+		setSelectedTagNo(tagNo);
+		setTagSearchInput("");
+		await loadSnippetList({ tagNo });
 	};
 
 	// 언어 필터를 변경합니다.
 	const handleLanguageChange = async (nextLanguageCd: string) => {
+		closeTopFilterOverlay();
 		setSelectedLanguageCd(nextLanguageCd);
 		await loadSnippetList({ languageCd: nextLanguageCd });
+	};
+
+	// 폴더 셀렉트 레이어를 토글합니다.
+	const handleFolderSelectToggle = () => {
+		const nextOpenState = !isFolderSelectOpen;
+		closeTopFilterOverlay();
+		setIsFolderSelectOpen(nextOpenState);
+	};
+
+	// 언어 셀렉트 레이어를 토글합니다.
+	const handleLanguageSelectToggle = () => {
+		const nextOpenState = !isLanguageSelectOpen;
+		closeTopFilterOverlay();
+		setIsLanguageSelectOpen(nextOpenState);
+	};
+
+	// 상단 태그 검색 입력값을 갱신합니다.
+	const handleTagSearchInputChange = (value: string) => {
+		setTagSearchInput(value);
+		setIsFolderSelectOpen(false);
+		setIsLanguageSelectOpen(false);
+		setFolderMenuPosition(null);
+		setLanguageMenuPosition(null);
+		setIsTagSuggestionOpen(normalizeTagSearchKey(value) !== "");
+	};
+
+	// 상단 태그 검색창 포커스 시 추천 패널을 엽니다.
+	const handleTagSearchFocus = () => {
+		setIsFolderSelectOpen(false);
+		setIsLanguageSelectOpen(false);
+		setFolderMenuPosition(null);
+		setLanguageMenuPosition(null);
+		setIsTagSuggestionOpen(normalizeTagSearchKey(tagSearchInput) !== "");
 	};
 
 	// 본문 포함 검색 여부를 변경합니다.
@@ -378,7 +521,6 @@ export default function SnippetWorkspacePage() {
 	// 퀵필터를 변경합니다.
 	const handleQuickFilterChange = async (nextQuickFilter: SnippetQuickFilter) => {
 		setSelectedQuickFilter(nextQuickFilter);
-		setOpenRecentPanel(null);
 		await loadSnippetList({ quickFilter: nextQuickFilter });
 	};
 
@@ -424,18 +566,6 @@ export default function SnippetWorkspacePage() {
 		await loadSnippetList();
 		setSelectedSnippetNo(response.snippetNo);
 		await reloadDetail(response.snippetNo);
-	};
-
-	// 최근 사용 패널을 토글합니다.
-	const handleRecentPanelToggle = (panelType: Exclude<RecentPanelType, null>) => {
-		setOpenRecentPanel((previousPanelType) => (previousPanelType === panelType ? null : panelType));
-	};
-
-	// 최근 사용 목록에서 스니펫을 열고 패널을 닫습니다.
-	const handleRecentSnippetOpen = (snippetNo: number, event: ReactMouseEvent<HTMLButtonElement>) => {
-		event.preventDefault();
-		setSelectedSnippetNo(snippetNo);
-		setOpenRecentPanel(null);
 	};
 
 	// 코드 복사를 처리하고 상세/목록을 최신 상태로 갱신합니다.
@@ -514,6 +644,7 @@ export default function SnippetWorkspacePage() {
 
 	// 폴더를 추가합니다.
 	const handleCreateFolder = async () => {
+		closeTopFilterOverlay();
 		const folderNm = window.prompt("새 폴더명을 입력해주세요.");
 		if (!folderNm || folderNm.trim() === "") {
 			return;
@@ -542,6 +673,7 @@ export default function SnippetWorkspacePage() {
 
 	// 언어를 추가합니다.
 	const handleCreateLanguage = async () => {
+		closeTopFilterOverlay();
 		const languageNm = window.prompt("새 언어명을 입력해주세요.");
 		if (!languageNm || languageNm.trim() === "") {
 			return;
@@ -569,6 +701,7 @@ export default function SnippetWorkspacePage() {
 
 	// 태그를 추가합니다.
 	const handleCreateTag = async () => {
+		closeTopFilterOverlay();
 		const tagNm = window.prompt("새 태그명을 입력해주세요.");
 		if (!tagNm || tagNm.trim() === "") {
 			return;
@@ -597,6 +730,7 @@ export default function SnippetWorkspacePage() {
 
 	// 폴더 삭제를 처리합니다.
 	const handleDeleteFolder = async (folder: SnippetFolder) => {
+		closeTopFilterOverlay();
 		if (!window.confirm(`"${folder.folderNm}" 폴더를 삭제하시겠습니까? 연결된 스니펫은 무폴더 상태로 유지됩니다.`)) {
 			return;
 		}
@@ -625,6 +759,7 @@ export default function SnippetWorkspacePage() {
 
 	// 언어 삭제를 처리합니다.
 	const handleDeleteLanguage = async (language: SnippetLanguage) => {
+		closeTopFilterOverlay();
 		if (!window.confirm(`"${language.languageNm}" 언어를 삭제하시겠습니까? 사용 중인 스니펫이 있으면 삭제되지 않습니다.`)) {
 			return;
 		}
@@ -652,32 +787,38 @@ export default function SnippetWorkspacePage() {
 		setIsActionPending(false);
 	};
 
-	// 태그 삭제를 처리합니다.
-	const handleDeleteTag = async (tag: SnippetTag) => {
-		if (!window.confirm(`"${tag.tagNm}" 태그를 삭제하시겠습니까? 연결된 태그 매핑만 제거됩니다.`)) {
-			return;
-		}
-
-		setIsActionPending(true);
-		const result = await requestSnippetClientApi<{ message: string }>(`/api/snippet/tags/${tag.tagNo}`, {
-			method: "DELETE",
-		});
-
-		if (!result.ok) {
-			setMessage(result.message || "태그를 삭제하지 못했습니다.");
-			setIsActionPending(false);
-			return;
-		}
-
+	// 태그 추천 목록에서 선택한 태그를 필터에 적용합니다.
+	const handleWorkspaceTagSuggestionSelect = async (tag: SnippetTag) => {
 		if (selectedTagNo === tag.tagNo) {
-			setSelectedTagNo(null);
+			setTagSearchInput("");
+			setIsTagSuggestionOpen(false);
+			return;
+		}
+		await handleTagSelect(tag.tagNo);
+	};
+
+	// 상단 태그 검색창의 Enter와 Escape 동작을 처리합니다.
+	const handleTagSearchKeyDown = async (event: ReactKeyboardEvent<HTMLInputElement>) => {
+		if (event.nativeEvent.isComposing) {
+			return;
 		}
 
-		setMessage("");
-		showFeedbackToast("태그를 삭제했습니다.");
-		await reloadBootstrap();
-		await loadSnippetList({ tagNo: selectedTagNo === tag.tagNo ? null : selectedTagNo });
-		setIsActionPending(false);
+		if (event.key === "Escape") {
+			setIsTagSuggestionOpen(false);
+			return;
+		}
+
+		if (event.key !== "Enter") {
+			return;
+		}
+
+		const matchedTag = findMatchedTag(bootstrap?.tagList ?? [], tagSearchInput);
+		if (matchedTag === null) {
+			return;
+		}
+
+		event.preventDefault();
+		await handleWorkspaceTagSuggestionSelect(matchedTag);
 	};
 
 	// 스니펫 로그아웃을 처리합니다.
@@ -687,10 +828,134 @@ export default function SnippetWorkspacePage() {
 		await router.replace("/snippet/login");
 	};
 
-	const selectedFolderName =
-		detail?.folderNo != null ? bootstrap?.folderList.find((folder) => folder.folderNo === detail.folderNo)?.folderNm ?? null : null;
-	const selectedLanguageName =
-		detail != null ? bootstrap?.languageList.find((language) => language.languageCd === detail.languageCd)?.languageNm ?? detail.languageCd.toUpperCase() : null;
+	const folderList = bootstrap?.folderList ?? [];
+	const languageList = bootstrap?.languageList ?? [];
+	const tagList = bootstrap?.tagList ?? [];
+	const selectedFolderFilter = folderList.find((folder) => folder.folderNo === selectedFolderNo) ?? null;
+	const selectedLanguageFilter = languageList.find((language) => language.languageCd === selectedLanguageCd) ?? null;
+	const selectedTagFilter = tagList.find((tag) => tag.tagNo === selectedTagNo) ?? null;
+	const normalizedTagSearchKeyValue = normalizeTagSearchKey(tagSearchInput);
+	const filteredTagSuggestionList = filterTagSuggestionList(
+		tagList,
+		tagSearchInput,
+		selectedTagFilter ? [selectedTagFilter.tagNo] : [],
+	).slice(0, 8);
+	const detailFolderName =
+		detail?.folderNo != null ? folderList.find((folder) => folder.folderNo === detail.folderNo)?.folderNm ?? null : null;
+	const detailLanguageName =
+		detail != null ? languageList.find((language) => language.languageCd === detail.languageCd)?.languageNm ?? detail.languageCd.toUpperCase() : null;
+	const folderSelectMenuLayer =
+		typeof document !== "undefined" && isFolderSelectOpen && folderMenuPosition
+			? createPortal(
+					<div
+						ref={folderMenuRef}
+						className={styles.inlineSelectMenu}
+						style={{ top: folderMenuPosition.top, left: folderMenuPosition.left, width: folderMenuPosition.width }}
+						role="listbox"
+						aria-label="폴더 선택"
+					>
+						<button
+							type="button"
+							className={`${styles.inlineSelectOption} ${selectedFolderNo === null ? styles.inlineSelectOptionActive : ""}`}
+							onClick={() => void handleFolderSelect(null)}
+						>
+							전체
+						</button>
+						{folderList.map((folder) => (
+							<div
+								key={folder.folderNo}
+								className={`${styles.inlineSelectMenuRow} ${selectedFolderNo === folder.folderNo ? styles.inlineSelectMenuRowActive : ""}`}
+							>
+								<button type="button" className={styles.inlineSelectMenuButton} onClick={() => void handleFolderSelect(folder.folderNo)}>
+									{folder.folderNm}
+								</button>
+								<button
+									type="button"
+									className={styles.inlineSelectMenuDeleteButton}
+									onClick={() => void handleDeleteFolder(folder)}
+									disabled={isActionPending}
+									aria-label={`${folder.folderNm} 삭제`}
+								>
+									×
+								</button>
+							</div>
+						))}
+					</div>,
+					document.body,
+				)
+			: null;
+	const languageSelectMenuLayer =
+		typeof document !== "undefined" && isLanguageSelectOpen && languageMenuPosition
+			? createPortal(
+					<div
+						ref={languageMenuRef}
+						className={styles.inlineSelectMenu}
+						style={{ top: languageMenuPosition.top, left: languageMenuPosition.left, width: languageMenuPosition.width }}
+						role="listbox"
+						aria-label="언어 선택"
+					>
+						<button
+							type="button"
+							className={`${styles.inlineSelectOption} ${selectedLanguageCd === "" ? styles.inlineSelectOptionActive : ""}`}
+							onClick={() => void handleLanguageChange("")}
+						>
+							전체
+						</button>
+						{languageList.map((language) => (
+							<div
+								key={language.languageCd}
+								className={`${styles.inlineSelectMenuRow} ${
+									selectedLanguageCd === language.languageCd ? styles.inlineSelectMenuRowActive : ""
+								}`}
+							>
+								<button type="button" className={styles.inlineSelectMenuButton} onClick={() => void handleLanguageChange(language.languageCd)}>
+									{language.languageNm}
+								</button>
+								<button
+									type="button"
+									className={styles.inlineSelectMenuDeleteButton}
+									onClick={() => void handleDeleteLanguage(language)}
+									disabled={isActionPending}
+									aria-label={`${language.languageNm} 삭제`}
+								>
+									×
+								</button>
+							</div>
+						))}
+					</div>,
+					document.body,
+				)
+			: null;
+	const tagSuggestionLayer =
+		typeof document !== "undefined" &&
+		isTagSuggestionOpen &&
+		normalizedTagSearchKeyValue !== "" &&
+		tagSuggestionPosition
+			? createPortal(
+					<div
+						ref={tagSuggestionPanelRef}
+						className={styles.tagSuggestionPanel}
+						style={{ top: tagSuggestionPosition.top, left: tagSuggestionPosition.left, width: tagSuggestionPosition.width }}
+					>
+						{filteredTagSuggestionList.length > 0 ? (
+							filteredTagSuggestionList.map((tag) => (
+								<button
+									key={tag.tagNo}
+									type="button"
+									className={styles.tagSuggestionButton}
+									onClick={() => void handleWorkspaceTagSuggestionSelect(tag)}
+								>
+									<span className={styles.tagSuggestionName}>#{tag.tagNm}</span>
+									<span className={styles.tagSuggestionHint}>기존 태그 선택</span>
+								</button>
+							))
+						) : (
+							<p className={styles.tagSuggestionHelper}>일치하는 태그가 없습니다. 새 태그는 + 버튼으로 추가해 주세요.</p>
+						)}
+					</div>,
+					document.body,
+				)
+			: null;
 
 	return (
 		<>
@@ -752,7 +1017,7 @@ export default function SnippetWorkspacePage() {
 									</label>
 								</form>
 
-								<div className={styles.quickActionBlock} ref={recentPanelRef}>
+								<div className={styles.quickActionBlock}>
 									<div className={styles.quickFilterRail}>
 										{QUICK_FILTER_OPTION_LIST.map((quickFilterOption) => (
 											<button
@@ -766,53 +1031,7 @@ export default function SnippetWorkspacePage() {
 												{quickFilterOption.label}
 											</button>
 										))}
-
-										<button
-											type="button"
-											className={`${styles.historyToggleButton} ${
-												openRecentPanel === "viewed" ? styles.historyToggleButtonActive : ""
-											}`}
-											onClick={() => handleRecentPanelToggle("viewed")}
-										>
-											최근 본
-										</button>
-
-										<button
-											type="button"
-											className={`${styles.historyToggleButton} ${
-												openRecentPanel === "copied" ? styles.historyToggleButtonActive : ""
-											}`}
-											onClick={() => handleRecentPanelToggle("copied")}
-										>
-											최근 복사
-										</button>
 									</div>
-
-									{openRecentPanel ? (
-										<div className={styles.recentDropdown}>
-											<p className={styles.recentDropdownTitle}>
-												{openRecentPanel === "viewed" ? "최근 본 스니펫" : "최근 복사한 스니펫"}
-											</p>
-
-											<div className={styles.recentDropdownList}>
-												{(openRecentPanel === "viewed" ? bootstrap.recentViewedList : bootstrap.recentCopiedList).length > 0 ? (
-													(openRecentPanel === "viewed" ? bootstrap.recentViewedList : bootstrap.recentCopiedList).map((snippet) => (
-														<button
-															key={`${openRecentPanel}-${snippet.snippetNo}`}
-															type="button"
-															className={styles.recentDropdownItem}
-															onClick={(event) => handleRecentSnippetOpen(snippet.snippetNo, event)}
-														>
-															<span className={styles.recentDropdownItemTitle}>{snippet.title}</span>
-															<span className={styles.recentDropdownItemMeta}>{snippet.languageNm}</span>
-														</button>
-													))
-												) : (
-													<p className={styles.recentEmptyText}>아직 기록이 없습니다.</p>
-												)}
-											</div>
-										</div>
-									) : null}
 								</div>
 							</section>
 
@@ -893,122 +1112,116 @@ export default function SnippetWorkspacePage() {
 						</aside>
 
 						<section className={styles.mainColumn}>
-							<div className={styles.topRailStack}>
-								<section className={styles.filterRail}>
-									<div className={styles.filterRailHeader}>
-										<span className={styles.filterRailLabel}>폴더</span>
-										<button type="button" className={styles.railHeaderAddButton} onClick={handleCreateFolder} disabled={isActionPending} aria-label="폴더 추가">
-											+
-										</button>
-									</div>
-									<div className={styles.filterRailContent}>
-										<button
-											type="button"
-											className={`${styles.railChipButton} ${selectedFolderNo === null ? styles.railChipButtonActive : ""}`}
-											onClick={() => void handleFolderSelect(null)}
-										>
-											전체
-										</button>
-
-										{bootstrap.folderList.map((folder) => (
-											<div
-												key={folder.folderNo}
-												className={`${styles.railChipItem} ${selectedFolderNo === folder.folderNo ? styles.railChipItemActive : ""}`}
+							<div className={styles.topFilterBar}>
+								<div className={styles.topFilterScroller} ref={topFilterScrollerRef}>
+									<div className={styles.inlineFilterGroup} ref={folderSelectRef}>
+										<div className={styles.inlineFilterLabelGroup}>
+											<span className={styles.inlineFilterLabel}>폴더</span>
+											<button
+												type="button"
+												className={styles.inlineToolButton}
+												onClick={handleCreateFolder}
+												disabled={isActionPending}
+												aria-label="폴더 추가"
 											>
-												<button type="button" className={styles.railChipItemButton} onClick={() => void handleFolderSelect(folder.folderNo)}>
-													{folder.folderNm}
-												</button>
-												<button
-													type="button"
-													className={styles.railDeleteButton}
-													onClick={() => void handleDeleteFolder(folder)}
-													disabled={isActionPending}
-													aria-label={`${folder.folderNm} 삭제`}
-												>
-													×
-												</button>
-											</div>
-										))}
-									</div>
-									<div className={styles.filterRailTopActions}>
-										<button type="button" className={styles.primaryAction} onClick={handleOpenCreateEditor}>
-											새 스니펫
-										</button>
-									</div>
-								</section>
-
-								<section className={styles.filterRail}>
-									<div className={styles.filterRailHeader}>
-										<span className={styles.filterRailLabel}>언어</span>
-										<button type="button" className={styles.railHeaderAddButton} onClick={handleCreateLanguage} disabled={isActionPending} aria-label="언어 추가">
-											+
-										</button>
-									</div>
-									<div className={styles.filterRailContent}>
-										<button
-											type="button"
-											className={`${styles.railChipButton} ${selectedLanguageCd === "" ? styles.railChipButtonActive : ""}`}
-											onClick={() => void handleLanguageChange("")}
-										>
-											전체
-										</button>
-
-										{bootstrap.languageList.map((language) => (
-											<div
-												key={language.languageCd}
-												className={`${styles.railChipItem} ${selectedLanguageCd === language.languageCd ? styles.railChipItemActive : ""}`}
+												+
+											</button>
+										</div>
+										<div className={styles.inlineSelectShell}>
+											<button
+												type="button"
+												className={styles.inlineSelectTrigger}
+												onClick={handleFolderSelectToggle}
+												aria-haspopup="listbox"
+												aria-expanded={isFolderSelectOpen}
+												ref={folderTriggerRef}
 											>
-												<button type="button" className={styles.railChipItemButton} onClick={() => void handleLanguageChange(language.languageCd)}>
-													{language.languageNm}
-												</button>
-												<button
-													type="button"
-													className={styles.railDeleteButton}
-													onClick={() => void handleDeleteLanguage(language)}
-													disabled={isActionPending}
-													aria-label={`${language.languageNm} 삭제`}
-												>
-													×
-												</button>
-											</div>
-										))}
+												<span className={styles.inlineSelectValue}>{selectedFolderFilter?.folderNm ?? "전체"}</span>
+												<span className={styles.inlineSelectChevron}>{isFolderSelectOpen ? "▴" : "▾"}</span>
+											</button>
+										</div>
 									</div>
-								</section>
 
-								<section className={styles.filterRail}>
-									<div className={styles.filterRailHeader}>
-										<span className={styles.filterRailLabel}>태그</span>
-										<button type="button" className={styles.railHeaderAddButton} onClick={handleCreateTag} disabled={isActionPending} aria-label="태그 추가">
-											+
-										</button>
+									<div className={styles.inlineFilterGroup} ref={languageSelectRef}>
+										<div className={styles.inlineFilterLabelGroup}>
+											<span className={styles.inlineFilterLabel}>언어</span>
+											<button
+												type="button"
+												className={styles.inlineToolButton}
+												onClick={handleCreateLanguage}
+												disabled={isActionPending}
+												aria-label="언어 추가"
+											>
+												+
+											</button>
+										</div>
+										<div className={styles.inlineSelectShell}>
+											<button
+												type="button"
+												className={styles.inlineSelectTrigger}
+												onClick={handleLanguageSelectToggle}
+												aria-haspopup="listbox"
+												aria-expanded={isLanguageSelectOpen}
+												ref={languageTriggerRef}
+											>
+												<span className={styles.inlineSelectValue}>{selectedLanguageFilter?.languageNm ?? "전체"}</span>
+												<span className={styles.inlineSelectChevron}>{isLanguageSelectOpen ? "▴" : "▾"}</span>
+											</button>
+										</div>
 									</div>
-									<div className={styles.filterRailContent}>
+
+									<div className={`${styles.inlineFilterGroup} ${styles.inlineFilterGroupWide}`} ref={tagFilterRef}>
+										<div className={styles.inlineFilterLabelGroup}>
+											<span className={styles.inlineFilterLabel}>태그</span>
+											<button
+												type="button"
+												className={styles.inlineToolButton}
+												onClick={handleCreateTag}
+												disabled={isActionPending}
+												aria-label="태그 추가"
+											>
+												+
+											</button>
+										</div>
 										<button
 											type="button"
-											className={`${styles.railChipButton} ${selectedTagNo === null ? styles.railChipButtonActive : ""}`}
+											className={`${styles.inlineFlatButton} ${selectedTagNo === null ? styles.inlineFlatButtonActive : ""}`}
 											onClick={() => void handleTagSelect(null)}
 										>
 											전체
 										</button>
-
-										{bootstrap.tagList.map((tag) => (
-											<div key={tag.tagNo} className={`${styles.railChipItem} ${selectedTagNo === tag.tagNo ? styles.railChipItemActive : ""}`}>
-												<button type="button" className={styles.railChipItemButton} onClick={() => void handleTagSelect(tag.tagNo)}>
-													#{tag.tagNm}
-												</button>
+										{selectedTagFilter ? (
+											<span className={styles.inlineSelectedChip}>
+												<span className={styles.inlineSelectedChipLabel}>#{selectedTagFilter.tagNm}</span>
 												<button
 													type="button"
-													className={styles.railDeleteButton}
-													onClick={() => void handleDeleteTag(tag)}
-													disabled={isActionPending}
-													aria-label={`${tag.tagNm} 삭제`}
+													className={styles.inlineSelectedChipRemove}
+													onClick={() => void handleTagSelect(null)}
+													aria-label="선택된 태그 해제"
 												>
 													×
 												</button>
-											</div>
-										))}
+											</span>
+										) : null}
+										<div className={styles.tagSearchShell} ref={tagSearchShellRef}>
+											<input
+												type="text"
+												value={tagSearchInput}
+												onChange={(event) => handleTagSearchInputChange(event.target.value)}
+												onFocus={handleTagSearchFocus}
+												onKeyDown={(event) => void handleTagSearchKeyDown(event)}
+												className={styles.tagSearchInput}
+												placeholder="태그 검색"
+											/>
+										</div>
 									</div>
-								</section>
+								</div>
+
+								<div className={styles.topFilterActionArea}>
+									<button type="button" className={styles.primaryAction} onClick={handleOpenCreateEditor}>
+										새 스니펫
+									</button>
+								</div>
 							</div>
 
 							<section className={styles.detailPanel}>
@@ -1018,16 +1231,16 @@ export default function SnippetWorkspacePage() {
 											<div className={styles.detailHeaderRow}>
 												<div className={styles.detailHeadingGroup}>
 													<div className={styles.detailMetaRow}>
-														<span className={styles.languageBadge}>{selectedLanguageName}</span>
+														<span className={styles.languageBadge}>{detailLanguageName}</span>
 														{detail.tagNoList.map((tagNo) => {
-															const matchedTag = bootstrap.tagList.find((tag) => tag.tagNo === tagNo);
+															const matchedTag = tagList.find((tag) => tag.tagNo === tagNo);
 															return matchedTag ? (
 																<span key={tagNo} className={styles.detailTagChip}>
 																	#{matchedTag.tagNm}
 																</span>
 															) : null;
 														})}
-														{selectedFolderName ? <span className={styles.detailMetaPill}>폴더 {selectedFolderName}</span> : null}
+														{detailFolderName ? <span className={styles.detailMetaPill}>폴더 {detailFolderName}</span> : null}
 														{detail.duplicateYn === "Y" ? <span className={styles.duplicateBadge}>중복 후보</span> : null}
 													</div>
 													<div className={styles.detailTitleRow}>
@@ -1106,6 +1319,9 @@ export default function SnippetWorkspacePage() {
 						</section>
 					</div>
 				) : null}
+				{folderSelectMenuLayer}
+				{languageSelectMenuLayer}
+				{tagSuggestionLayer}
 			</div>
 		</>
 	);

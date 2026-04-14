@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchNewsMetaFile,
@@ -71,6 +72,32 @@ function moveIdByOffset(orderedIds: string[], targetId: string, offset: number):
 }
 
 /**
+ * 기사 썸네일 이미지를 렌더링한다.
+ */
+function ArticleThumbnail({ thumbnailUrl }: { thumbnailUrl: string }) {
+  const [isThumbnailVisible, setIsThumbnailVisible] = useState(true);
+
+  // 이미지 로드 실패 시 레이아웃 흔들림을 줄이기 위해 영역 자체를 숨긴다.
+  if (!isThumbnailVisible) {
+    return null;
+  }
+
+  return (
+    <div className="relative flex-shrink-0 w-20 h-14 overflow-hidden rounded">
+      <Image
+        src={thumbnailUrl}
+        alt=""
+        fill
+        sizes="80px"
+        unoptimized
+        className="object-cover"
+        onError={() => setIsThumbnailVisible(false)}
+      />
+    </div>
+  );
+}
+
+/**
  * 기사 아이템 컴포넌트
  */
 function ArticleItem({ article }: { article: Article }) {
@@ -82,19 +109,7 @@ function ArticleItem({ article }: { article: Article }) {
         rel="noreferrer"
         className="w-full flex gap-2 hover:opacity-75 transition-opacity"
       >
-        {article.thumbnailUrl && (
-          <div className="flex-shrink-0 w-20 h-14 overflow-hidden rounded">
-            <img
-              src={article.thumbnailUrl}
-              alt=""
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                const wrapper = (e.currentTarget as HTMLImageElement).parentElement;
-                if (wrapper) wrapper.style.display = "none";
-              }}
-            />
-          </div>
-        )}
+        {article.thumbnailUrl ? <ArticleThumbnail thumbnailUrl={article.thumbnailUrl} /> : null}
         <div className="w-full flex flex-col gap-0.5 min-w-0">
           <span className="text-base font-bold text-black leading-snug break-keep">
             {article.title}

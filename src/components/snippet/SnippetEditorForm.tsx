@@ -13,6 +13,13 @@ import {
 	type SnippetTag,
 } from "@/services/snippetApiService";
 import styles from "./SnippetEditorPage.module.css";
+import {
+	filterTagSuggestionList,
+	findMatchedTag,
+	mergeAvailableTagList,
+	normalizeTagCreateName,
+	normalizeTagSearchKey,
+} from "./snippetTagSearchUtils";
 
 const SnippetCodeEditor = dynamic(() => import("@/components/snippet/SnippetCodeEditor"), {
 	ssr: false,
@@ -30,42 +37,6 @@ interface SnippetEditorFormProps {
 	onClose?: () => void;
 	onSaved?: (response: SnippetSaveResponse) => Promise<void> | void;
 	onSavingChange?: (saving: boolean) => void;
-}
-
-// 태그 검색 비교용 키를 생성합니다.
-function normalizeTagSearchKey(value: string): string {
-	const normalizedValue = value.trim().replace(/^#+/, "").trim();
-	return normalizedValue === "" ? "" : normalizedValue.toLowerCase();
-}
-
-// 태그 생성 요청에 사용할 표시명을 정규화합니다.
-function normalizeTagCreateName(value: string): string | null {
-	const normalizedValue = value.trim().replace(/^#+/, "").trim();
-	return normalizedValue === "" ? null : normalizedValue;
-}
-
-// 입력값과 정확히 일치하는 기존 태그를 찾습니다.
-function findMatchedTag(tagList: SnippetTag[], inputValue: string): SnippetTag | null {
-	const normalizedSearchKey = normalizeTagSearchKey(inputValue);
-	if (normalizedSearchKey === "") {
-		return null;
-	}
-	return tagList.find((tag) => normalizeTagSearchKey(tag.tagNm) === normalizedSearchKey) ?? null;
-}
-
-// 새로 생성된 태그를 기존 태그 목록에 합칩니다.
-function mergeAvailableTagList(tagList: SnippetTag[], createdTag: SnippetTag): SnippetTag[] {
-	const mergedTagMap = new Map<number, SnippetTag>();
-	tagList.forEach((tag) => {
-		mergedTagMap.set(tag.tagNo, tag);
-	});
-	mergedTagMap.set(createdTag.tagNo, createdTag);
-	return Array.from(mergedTagMap.values()).sort((leftTag, rightTag) => {
-		if (leftTag.sortSeq !== rightTag.sortSeq) {
-			return leftTag.sortSeq - rightTag.sortSeq;
-		}
-		return leftTag.tagNo - rightTag.tagNo;
-	});
 }
 
 // 편집 폼 기본값을 생성합니다.
@@ -385,15 +356,7 @@ export default function SnippetEditorForm({
 	const normalizedTagCreateValue = normalizeTagCreateName(tagInputValue);
 	const matchedTag = findMatchedTag(availableTagList, tagInputValue);
 	const selectedTagList = availableTagList.filter((tag) => form.tagNoList.includes(tag.tagNo));
-	const filteredTagSuggestionList =
-		normalizedTagInputKey === ""
-			? []
-			: availableTagList.filter((tag) => {
-					if (form.tagNoList.includes(tag.tagNo)) {
-						return false;
-					}
-					return normalizeTagSearchKey(tag.tagNm).includes(normalizedTagInputKey);
-			  });
+	const filteredTagSuggestionList = filterTagSuggestionList(availableTagList, tagInputValue, form.tagNoList);
 
 	return (
 		<div className={shellClassName}>

@@ -276,9 +276,8 @@
 }
 
 .searchInput,
-.checkboxLabel,
-.listSortSelect {
-	border: 1px solid var(--panel-border);
+.checkboxLabel {
+	border: 1px solid #ccc;
 	border-radius: var(--radius);
 	background: var(--panel-bg-strong);
 	color: var(--ink);
@@ -546,6 +545,401 @@
 	grid-template-rows: auto minmax(0, 1fr);
 	gap: 1rem;
 	min-height: 0;
+}
+
+.topFilterBar {
+	display: flex;
+	align-items: stretch;
+	gap: 0.85rem;
+	min-width: 0;
+	padding: 0.8rem 0.95rem;
+	border-radius: var(--radius);
+	background: linear-gradient(180deg, #fbfcfe 0%, #f4f7fb 100%);
+	box-shadow:
+		0 10px 22px rgba(15, 23, 42, 0.04),
+		inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+.topFilterScroller {
+	display: flex;
+	align-items: stretch;
+	gap: 0.75rem;
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow-x: auto;
+	padding: 0;
+}
+
+.topFilterActionArea {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	flex: 0 0 auto;
+	padding-left: 0.2rem;
+}
+
+.inlineFilterGroup {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex: 0 0 auto;
+	min-width: 0;
+	min-height: 3.15rem;
+	padding: 0.42rem 0.5rem;
+	border-radius: var(--radius);
+	background: #f7f9fc;
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.75),
+		0 4px 10px rgba(15, 23, 42, 0.03);
+	box-sizing: border-box;
+}
+
+.inlineFilterLabelGroup {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4rem;
+	flex: 0 0 auto;
+	height: 2.25rem;
+	padding: 0 0.38rem 0 0.58rem;
+	border: 1px solid #d8e0e8;
+	border-radius: var(--radius);
+	background: #eef3f8;
+}
+
+.inlineFilterGroupWide {
+	min-width: 27rem;
+}
+
+.inlineFilterLabel {
+	flex: 0 0 auto;
+	font-size: 0.8rem;
+	font-weight: 800;
+	color: #45586f;
+	white-space: nowrap;
+	letter-spacing: -0.01em;
+}
+
+.inlineSelectShell {
+	flex: 0 0 auto;
+	min-width: 10rem;
+}
+
+.inlineSelectTrigger,
+.inlineToolButton,
+.inlineFlatButton,
+.inlineSelectedChipRemove,
+.tagSuggestionButton {
+	cursor: pointer;
+}
+
+.inlineSelectTrigger {
+	display: inline-flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.7rem;
+	width: 100%;
+	height: 2.28rem;
+	padding: 0 0.85rem;
+	border: 1px solid #cfd6df;
+	border-radius: var(--radius);
+	background: #ffffff;
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.7),
+		0 1px 0 rgba(15, 23, 42, 0.02);
+	color: var(--ink);
+	font-size: 0.86rem;
+	font-weight: 700;
+	text-align: left;
+}
+
+.inlineSelectValue {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.inlineSelectChevron {
+	flex: 0 0 auto;
+	font-size: 0.68rem;
+	color: var(--muted);
+}
+
+.inlineSelectMenu {
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: 90;
+	display: grid;
+	gap: 0.2rem;
+	max-height: min(22rem, calc(100vh - 5rem));
+	padding: 0.35rem;
+	border: 1px solid #cfd6df;
+	border-radius: var(--radius);
+	background: #ffffff;
+	box-shadow: 0 20px 40px rgba(15, 23, 42, 0.16);
+	box-sizing: border-box;
+	overflow: auto;
+}
+
+.inlineSelectOption {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	min-height: 2rem;
+	padding: 0 0.75rem;
+	border: 1px solid transparent;
+	border-radius: var(--radius);
+	background: #ffffff;
+	color: var(--ink);
+	font-size: 0.84rem;
+	font-weight: 600;
+	text-align: left;
+	cursor: pointer;
+}
+
+.inlineSelectMenuRow {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: stretch;
+	gap: 0.2rem;
+	padding: 0.05rem;
+	border: 1px solid rgba(15, 23, 42, 0.05);
+	border-radius: var(--radius);
+	background: #ffffff;
+}
+
+.inlineSelectMenuRowActive {
+	border-color: rgba(35, 99, 143, 0.14);
+	background: rgba(35, 99, 143, 0.08);
+}
+
+.inlineSelectMenuButton,
+.inlineSelectMenuDeleteButton {
+	display: inline-flex;
+	align-items: center;
+	border: none;
+	border-radius: var(--radius);
+	background: #ffffff;
+	cursor: pointer;
+}
+
+.inlineSelectMenuButton {
+	justify-content: flex-start;
+	min-width: 0;
+	padding: 0.55rem 0.7rem;
+	color: var(--ink);
+	font-size: 0.84rem;
+	font-weight: 600;
+	text-align: left;
+}
+
+.inlineSelectMenuDeleteButton {
+	justify-content: center;
+	width: 2rem;
+	padding: 0;
+	color: var(--danger);
+	font-size: 0.98rem;
+	border-left: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.inlineSelectOptionActive {
+	background: rgba(35, 99, 143, 0.1);
+	border-color: rgba(35, 99, 143, 0.14);
+	color: var(--accent-strong);
+}
+
+.inlineToolButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.8rem;
+	height: 1.8rem;
+	padding: 0;
+	border: 1px solid #d0d7e1;
+	border-radius: var(--radius);
+	background: #ffffff;
+	color: var(--accent-strong);
+	font-size: 0.92rem;
+	font-weight: 700;
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.inlineToolButton:disabled {
+	opacity: 0.42;
+	cursor: not-allowed;
+}
+
+.inlineFlatButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	height: 2.18rem;
+	padding: 0 0.82rem;
+	border: 1px solid #cfd6df;
+	border-radius: var(--radius);
+	background: #ffffff;
+	color: #56677c;
+	font-size: 0.84rem;
+	font-weight: 700;
+	white-space: nowrap;
+	flex: 0 0 auto;
+}
+
+.inlineFlatButtonActive {
+	border-color: rgba(35, 99, 143, 0.22);
+	background: rgba(35, 99, 143, 0.12);
+	color: var(--accent-strong);
+}
+
+.inlineSelectedChip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	height: 2.18rem;
+	padding: 0 0.35rem 0 0.72rem;
+	border: 1px solid #bfd0e0;
+	border-radius: var(--radius);
+	background: #eef5fb;
+	color: var(--accent-strong);
+	flex: 0 0 auto;
+}
+
+.inlineSelectedChipLabel {
+	font-size: 0.82rem;
+	font-weight: 700;
+	white-space: nowrap;
+}
+
+.inlineSelectedChipRemove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.45rem;
+	height: 1.45rem;
+	padding: 0;
+	border: none;
+	border-radius: var(--radius);
+	background: rgba(255, 255, 255, 0.7);
+	color: var(--accent-strong);
+	font-size: 0.92rem;
+}
+
+.tagSearchShell {
+	display: flex;
+	align-items: center;
+	flex: 1 1 auto;
+	min-width: 14.5rem;
+}
+
+.tagSearchInput {
+	width: 100%;
+	height: 2.28rem;
+	padding: 0 0.85rem;
+	border: 1px solid #cfd6df;
+	border-radius: var(--radius);
+	background: #ffffff;
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.7),
+		0 1px 0 rgba(15, 23, 42, 0.02);
+	color: var(--ink);
+	font-size: 0.86rem;
+}
+
+.tagSuggestionPanel {
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: 90;
+	display: grid;
+	gap: 0.28rem;
+	max-height: min(20rem, calc(100vh - 5rem));
+	padding: 0.4rem;
+	border: 1px solid #ccc;
+	border-radius: var(--radius);
+	background: #ffffff;
+	box-shadow: 0 20px 40px rgba(15, 23, 42, 0.16);
+	overflow: auto;
+}
+
+.tagSuggestionButton {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.8rem;
+	width: 100%;
+	padding: 0.62rem 0.7rem;
+	border: 1px solid transparent;
+	border-radius: var(--radius);
+	background: #ffffff;
+	color: var(--ink);
+	text-align: left;
+}
+
+.tagSuggestionName {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 0.84rem;
+	font-weight: 700;
+}
+
+.tagSuggestionHint {
+	flex: 0 0 auto;
+	font-size: 0.76rem;
+	color: var(--muted);
+}
+
+.tagSuggestionHelper {
+	margin: 0;
+	padding: 0.5rem 0.65rem;
+	color: var(--muted);
+	font-size: 0.8rem;
+	line-height: 1.5;
+}
+
+.inlineSelectTrigger:hover,
+.inlineSelectTrigger:focus-visible {
+	border-color: #8caecc;
+	outline: none;
+	box-shadow:
+		0 0 0 3px rgba(35, 99, 143, 0.08),
+		inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.inlineSelectOption:hover,
+.inlineSelectOption:focus-visible,
+.inlineSelectMenuButton:hover,
+.inlineSelectMenuButton:focus-visible,
+.inlineSelectMenuDeleteButton:hover,
+.inlineSelectMenuDeleteButton:focus-visible,
+.tagSuggestionButton:hover,
+.tagSuggestionButton:focus-visible {
+	border-color: rgba(35, 99, 143, 0.14);
+	background: rgba(35, 99, 143, 0.06);
+	outline: none;
+}
+
+.inlineToolButton:hover:not(:disabled),
+.inlineToolButton:focus-visible:not(:disabled) {
+	border-color: #8caecc;
+	background: #eef5fb;
+	outline: none;
+}
+
+.inlineFlatButton:hover,
+.inlineFlatButton:focus-visible,
+.inlineSelectedChipRemove:hover,
+.inlineSelectedChipRemove:focus-visible,
+.tagSearchInput:hover,
+.tagSearchInput:focus-visible {
+	border-color: #8caecc;
+	outline: none;
+}
+
+.tagSearchInput:focus-visible {
+	box-shadow: 0 0 0 3px rgba(35, 99, 143, 0.08);
 }
 
 .topRailStack {
