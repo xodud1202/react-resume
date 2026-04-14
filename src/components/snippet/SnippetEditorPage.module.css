@@ -248,6 +248,7 @@
 .selectBox {
 	min-height: 3rem;
 	padding: 0.9rem 1rem;
+	border: solid 1px #333;
 }
 
 .textArea,
@@ -256,6 +257,7 @@
 	padding: 0.95rem 1rem;
 	line-height: 1.7;
 	resize: vertical;
+	border: solid 1px #333;
 }
 
 .textInput:focus,
