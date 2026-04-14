@@ -1,0 +1,1690 @@
+import Head from "next/head";
+import { useRouter } from "next/router";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import AdminDateInput from "@/components/work/AdminDateInput";
+import LazyQuillEditor from "@/components/work/LazyQuillEditor";
+import WorkReadonlyHtml from "@/components/work/WorkReadonlyHtml";
+import type {
+	WorkBootstrapResponse,
+	WorkCommonCode,
+	WorkDetail,
+	WorkDetailResponse,
+	WorkDetailUpdateRequest,
+	WorkFile,
+	WorkImportRequest,
+	WorkListFilter,
+	WorkListResponse,
+	WorkListRow,
+	WorkProjectOption,
+	WorkReply,
+	WorkReplyFile,
+} from "@/components/work/types";
+import useWorkQuillImageUpload from "@/components/work/useWorkQuillImageUpload";
+import {
+	createWorkManual,
+	createWorkReply,
+	deleteWorkReply,
+	downloadWorkReplyFile,
+	fetchWorkBootstrap,
+	fetchWorkDetail,
+	fetchWorkList,
+	fetchWorkProjectList,
+	fetchWorkSectionMore,
+	importWork,
+	logoutWork,
+	refreshWorkSession,
+	updateWorkDetail,
+	updateWorkReply,
+} from "@/services/workApiService";
+import styles from "./WorkWorkspacePage.module.css";
+
+const DEFAULT_SECTION_PAGE_SIZE = 10;
+const IMAGE_FILE_PATTERN = /\.(png|jpe?g|gif|bmp|webp|svg)(\?|$)/i;
+const REPLY_EDITOR_TOOLBAR_OPTIONS = [
+	[{ header: [1, 2, 3, false] }],
+	["bold", "italic", "underline", "strike"],
+	[{ list: "ordered" }, { list: "bullet" }],
+	[{ color: [] }, { background: [] }],
+	["blockquote", "code-block", "link", "image"],
+	["clean"],
+];
+const REPLY_EDITOR_FORMATS = [
+	"header",
+	"bold",
+	"italic",
+	"underline",
+	"strike",
+	"list",
+	"bullet",
+	"color",
+	"background",
+	"blockquote",
+	"code-block",
+	"link",
+	"image",
+];
+
+interface DetailEditFormState {
+	// 현재 편집 중인 업무 번호입니다.
+	workSeq: number;
+	// 제목입니다.
+	title: string;
+	// 상태 코드입니다.
+	workStatCd: string;
+	// 담당자입니다.
+	coManager: string;
+	// 업무 생성일시입니다.
+	workCreateDt: string;
+	// 업무 시작일시입니다.
+	workStartDt: string;
+	// 업무 종료일시입니다.
+	workEndDt: string;
+	// 공수 문자열입니다.
+	workTime: string;
+	// 본문입니다.
+	content: string;
+}
+
+interface ManualCreateFormState {
+	// 제목입니다.
+	title: string;
+	// 담당자입니다.
+	coManager: string;
+	// 우선순위 코드입니다.
+	workPriorCd: string;
+	// 본문입니다.
+	content: string;
+}
+
+interface LoadWorkListOptions extends WorkListFilter {
+	// 로드 후 우선 선택할 업무 번호입니다.
+	preferredWorkSeq?: number | null;
+}
+
+// returnUrl을 업무관리 경로로만 제한합니다.
+function resolveSafeReturnUrl(value: string | string[] | undefined): string {
+	const rawValue = Array.isArray(value) ? value[0] ?? "" : value ?? "";
+	const normalizedValue = rawValue.trim();
+	if (!normalizedValue.startsWith("/work")) {
+		return "/work";
+	}
+	return normalizedValue;
+}
+
+// 입력값을 공백 제거한 문자열로 정리합니다.
+function trimText(value: string | null | undefined): string {
+	return typeof value === "string" ? value.trim() : "";
+}
+
+// 이미지 첨부 여부를 파일명과 URL 기준으로 판단합니다.
+function isImageAttachmentByValues(fileName: string, fileUrl?: string | null): boolean {
+	return IMAGE_FILE_PATTERN.test(fileName || "") || IMAGE_FILE_PATTERN.test(fileUrl || "");
+}
+
+// 업무 첨부파일이 이미지인지 판단합니다.
+function isImageWorkFile(file: WorkFile): boolean {
+	return isImageAttachmentByValues(file.workJobFileNm, file.workJobFileUrl);
+}
+
+// 댓글 첨부파일이 이미지인지 판단합니다.
+function isImageReplyFile(file: WorkReplyFile): boolean {
+	return isImageAttachmentByValues(file.replyFileNm, file.replyFileUrl);
+}
+
+// 브라우저에서 선택한 파일이 이미지인지 판단합니다.
+function isImageSelectedFile(file: File): boolean {
+	return file.type.startsWith("image/") || isImageAttachmentByValues(file.name);
+}
+
+// 상세 편집 폼의 빈 초기값을 생성합니다.
+function createEmptyDetailEditForm(): DetailEditFormState {
+	return {
+		workSeq: 0,
+		title: "",
+		workStatCd: "",
+		coManager: "",
+		workCreateDt: "",
+		workStartDt: "",
+		workEndDt: "",
+		workTime: "",
+		content: "",
+	};
+}
+
+// 수기 등록 폼의 빈 초기값을 생성합니다.
+function createEmptyManualCreateForm(): ManualCreateFormState {
+	return {
+		title: "",
+		coManager: "",
+		workPriorCd: "",
+		content: "",
+	};
+}
+
+// 서버 날짜 문자열을 date 입력값으로 변환합니다.
+function resolveDateInputValue(value: string | null | undefined): string {
+	const normalizedValue = trimText(value);
+	if (normalizedValue === "") {
+		return "";
+	}
+	return normalizedValue.slice(0, 10);
+}
+
+// 숫자 문자열을 API 저장용 공수값으로 변환합니다.
+function resolveNullableWorkTime(value: string): number | null {
+	const normalizedValue = trimText(value);
+	if (normalizedValue === "") {
+		return null;
+	}
+	const parsedValue = Number(normalizedValue);
+	return Number.isFinite(parsedValue) ? parsedValue : null;
+}
+
+// 상세 편집 폼을 API 요청 payload로 변환합니다.
+function buildDetailUpdateRequest(form: DetailEditFormState): WorkDetailUpdateRequest {
+	return {
+		workSeq: form.workSeq,
+		title: form.title,
+		workStatCd: form.workStatCd,
+		coManager: form.coManager,
+		workCreateDt: form.workCreateDt,
+		workStartDt: form.workStartDt,
+		workEndDt: form.workEndDt,
+		workTime: resolveNullableWorkTime(form.workTime),
+		content: form.content,
+		deleteWorkJobFileSeqList: [],
+	};
+}
+
+// 상세 응답을 즉시 수정 폼 상태로 변환합니다.
+function createDetailEditForm(detail: WorkDetail | null): DetailEditFormState {
+	if (!detail) {
+		return createEmptyDetailEditForm();
+	}
+	return {
+		workSeq: detail.workSeq,
+		title: detail.title || "",
+		workStatCd: detail.workStatCd || "",
+		coManager: detail.coManager || "",
+		workCreateDt: detail.workCreateDt || "",
+		workStartDt: resolveDateInputValue(detail.workStartDt),
+		workEndDt: resolveDateInputValue(detail.workEndDt),
+		workTime: detail.workTime === null || typeof detail.workTime === "undefined" ? "" : String(detail.workTime),
+		content: detail.content || "",
+	};
+}
+
+// 상세 정보에서 목록 행 업데이트용 객체를 생성합니다.
+function createWorkListRowFromDetail(detail: WorkDetail): WorkListRow {
+	return {
+		workSeq: detail.workSeq,
+		workCompanySeq: detail.workCompanySeq,
+		workCompanyProjectSeq: detail.workCompanyProjectSeq,
+		workStatCd: detail.workStatCd,
+		workKey: detail.workKey,
+		title: detail.title,
+		replyCount: detail.replyCount,
+		workCreateDt: detail.workCreateDt,
+		workStartDt: detail.workStartDt,
+		workEndDt: detail.workEndDt,
+		workTime: detail.workTime,
+		workPriorCd: detail.workPriorCd,
+		workPriorNm: detail.workPriorNm,
+		itManager: detail.itManager,
+		coManager: detail.coManager,
+		regDt: detail.regDt,
+		udtDt: detail.udtDt,
+	};
+}
+
+// 업무 목록을 업무 생성일시 내림차순으로 정렬합니다.
+function sortWorkListRowsByCreateDt(rowList: WorkListRow[]): WorkListRow[] {
+	return [...rowList].sort((leftRow, rightRow) => {
+		const createDateCompare = trimText(rightRow.workCreateDt).localeCompare(trimText(leftRow.workCreateDt));
+		if (createDateCompare !== 0) {
+			return createDateCompare;
+		}
+		return rightRow.workSeq - leftRow.workSeq;
+	});
+}
+
+// 저장된 상세 값을 목록 응답에도 반영합니다.
+function applyUpdatedWorkRowToListResponse(listResponse: WorkListResponse | null, updatedRow: WorkListRow): WorkListResponse | null {
+	if (!listResponse) {
+		return listResponse;
+	}
+	return {
+		statusSectionList: listResponse.statusSectionList.map((sectionItem) => {
+			const currentRow = sectionItem.list.find((rowItem) => rowItem.workSeq === updatedRow.workSeq);
+			if (!currentRow && sectionItem.workStatCd !== updatedRow.workStatCd) {
+				return sectionItem;
+			}
+
+			const filteredList = sectionItem.list.filter((rowItem) => rowItem.workSeq !== updatedRow.workSeq);
+			if (sectionItem.workStatCd !== updatedRow.workStatCd) {
+				return {
+					...sectionItem,
+					list: filteredList,
+					totalCount: Math.max(0, sectionItem.totalCount - (currentRow ? 1 : 0)),
+					hasMore: sectionItem.hasMore || (currentRow ? sectionItem.totalCount - 1 > filteredList.length : false),
+				};
+			}
+
+			const nextList = sortWorkListRowsByCreateDt([...filteredList, updatedRow]);
+			const visibleList = nextList.slice(0, Math.max(sectionItem.list.length, currentRow ? sectionItem.list.length : 1));
+			const nextTotalCount = currentRow ? sectionItem.totalCount : sectionItem.totalCount + 1;
+			return {
+				...sectionItem,
+				list: visibleList,
+				totalCount: nextTotalCount,
+				hasMore: nextTotalCount > visibleList.length,
+			};
+		}),
+	};
+}
+
+// 상태명 표시용 라벨을 계산합니다.
+function resolveStatusName(workStatCd: string, workStatList: WorkCommonCode[]): string {
+	return workStatList.find((codeItem) => codeItem.cd === workStatCd)?.cdNm || workStatCd || "상태 미지정";
+}
+
+// 상태 필터 버튼 문구를 계산합니다.
+function resolveStatusFilterButtonLabel(selectedCodeList: string[], workStatList: WorkCommonCode[]): string {
+	if (selectedCodeList.length < 1) {
+		return "상태 전체";
+	}
+	if (selectedCodeList.length === workStatList.length) {
+		return "상태 전체";
+	}
+	if (selectedCodeList.length === 1) {
+		return resolveStatusName(selectedCodeList[0], workStatList);
+	}
+	return `상태 ${selectedCodeList.length}개`;
+}
+
+// Quill HTML에서 실제 보이는 텍스트가 있는지 판단합니다.
+function hasVisibleEditorText(value: string): boolean {
+	return value.replace(/<img[^>]*>/gi, " IMG ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() !== "";
+}
+
+// Blob 다운로드를 브라우저에 위임합니다.
+function triggerBrowserFileDownload(blob: Blob, fileName: string) {
+	const blobUrl = window.URL.createObjectURL(blob);
+	const link = document.createElement("a");
+	link.href = blobUrl;
+	link.download = fileName;
+	link.click();
+	window.URL.revokeObjectURL(blobUrl);
+}
+
+// 공통 모달 셸을 렌더링합니다.
+function WorkModalShell({
+	title,
+	onClose,
+	children,
+}: {
+	// 모달 제목입니다.
+	title: string;
+	// 닫기 처리입니다.
+	onClose: () => void;
+	// 내부 콘텐츠입니다.
+	children: ReactNode;
+}) {
+	return (
+		<div className={styles.modalOverlay} onClick={onClose}>
+			<div className={styles.modalDialog} onClick={(event) => event.stopPropagation()}>
+				<div className={styles.modalHeader}>
+					<h2 className={styles.modalTitle}>{title}</h2>
+					<button type="button" className={styles.modalCloseButton} onClick={onClose}>
+						닫기
+					</button>
+				</div>
+				<div className={styles.modalBody}>{children}</div>
+			</div>
+		</div>
+	);
+}
+
+// 업무관리 메인 작업 화면을 렌더링합니다.
+export default function WorkWorkspacePage() {
+	const router = useRouter();
+	const feedbackToastTimerRef = useRef<number | null>(null);
+	const statusFilterRef = useRef<HTMLDivElement | null>(null);
+	const replyFileInputRef = useRef<HTMLInputElement | null>(null);
+	const editingReplyFileInputRef = useRef<HTMLInputElement | null>(null);
+	const [isInitializing, setIsInitializing] = useState(true);
+	const [isListLoading, setIsListLoading] = useState(false);
+	const [isDetailLoading, setIsDetailLoading] = useState(false);
+	const [isDetailSaving, setIsDetailSaving] = useState(false);
+	const [isReplySaving, setIsReplySaving] = useState(false);
+	const [isActionPending, setIsActionPending] = useState(false);
+	const [message, setMessage] = useState("");
+	const [feedbackToastMessage, setFeedbackToastMessage] = useState("");
+	const [isFeedbackToastVisible, setIsFeedbackToastVisible] = useState(false);
+	const [bootstrap, setBootstrap] = useState<WorkBootstrapResponse | null>(null);
+	const [projectList, setProjectList] = useState<WorkProjectOption[]>([]);
+	const [listResponse, setListResponse] = useState<WorkListResponse | null>(null);
+	const [detailResponse, setDetailResponse] = useState<WorkDetailResponse | null>(null);
+	const [selectedWorkSeq, setSelectedWorkSeq] = useState<number | null>(null);
+	const [selectedCompanySeq, setSelectedCompanySeq] = useState<number | null>(null);
+	const [selectedProjectSeq, setSelectedProjectSeq] = useState<number | null>(null);
+	const [searchInput, setSearchInput] = useState("");
+	const [searchKeyword, setSearchKeyword] = useState("");
+	const [includeBodyYn, setIncludeBodyYn] = useState("N");
+	const [selectedStatusCodeList, setSelectedStatusCodeList] = useState<string[]>([]);
+	const [statusFilterOpen, setStatusFilterOpen] = useState(false);
+	const [detailEditForm, setDetailEditForm] = useState<DetailEditFormState>(createEmptyDetailEditForm);
+	const [sectionLoadingMap, setSectionLoadingMap] = useState<Record<string, boolean>>({});
+	const [previewImageUrl, setPreviewImageUrl] = useState("");
+	const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+	const [isManualSaving, setIsManualSaving] = useState(false);
+	const [manualForm, setManualForm] = useState<ManualCreateFormState>(createEmptyManualCreateForm);
+	const [manualFiles, setManualFiles] = useState<File[]>([]);
+	const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+	const [isImportSaving, setIsImportSaving] = useState(false);
+	const [importWorkKey, setImportWorkKey] = useState("");
+	const [replyComment, setReplyComment] = useState("");
+	const [replyFiles, setReplyFiles] = useState<File[]>([]);
+	const [editingReplySeq, setEditingReplySeq] = useState<number | null>(null);
+	const [editingReplyComment, setEditingReplyComment] = useState("");
+	const [editingReplyFiles, setEditingReplyFiles] = useState<File[]>([]);
+	const [editingDeleteReplyFileSeqList, setEditingDeleteReplyFileSeqList] = useState<number[]>([]);
+
+	const replyQuill = useWorkQuillImageUpload({
+		toolbarOptions: REPLY_EDITOR_TOOLBAR_OPTIONS,
+		formats: REPLY_EDITOR_FORMATS,
+		onChange: setReplyComment,
+		editorId: "work-reply-editor",
+	});
+	const editingReplyEditorId = useMemo(
+		() => `work-reply-editor-${editingReplySeq ?? "new"}`,
+		[editingReplySeq],
+	);
+	const editingReplyQuill = useWorkQuillImageUpload({
+		toolbarOptions: REPLY_EDITOR_TOOLBAR_OPTIONS,
+		formats: REPLY_EDITOR_FORMATS,
+		onChange: setEditingReplyComment,
+		editorId: editingReplyEditorId,
+	});
+	const workStatList = bootstrap?.workStatList ?? [];
+	const workPriorList = bootstrap?.workPriorList ?? [];
+	const currentUser = bootstrap?.currentUser ?? null;
+	const selectedDetail = detailResponse?.detail ?? null;
+	const statusFilterButtonLabel = resolveStatusFilterButtonLabel(selectedStatusCodeList, workStatList);
+	const visibleStatusSectionList = useMemo(
+		() => (listResponse?.statusSectionList ?? []).filter((sectionItem) => sectionItem.totalCount > 0),
+		[listResponse],
+	);
+
+	// 중앙 토스트 타이머를 정리합니다.
+	const clearFeedbackToastTimer = () => {
+		if (feedbackToastTimerRef.current !== null) {
+			window.clearTimeout(feedbackToastTimerRef.current);
+			feedbackToastTimerRef.current = null;
+		}
+	};
+
+	// 공통 성공 토스트를 잠깐 노출합니다.
+	const showFeedbackToast = (toastMessage: string) => {
+		clearFeedbackToastTimer();
+		setFeedbackToastMessage(toastMessage);
+		setIsFeedbackToastVisible(true);
+		feedbackToastTimerRef.current = window.setTimeout(() => {
+			setIsFeedbackToastVisible(false);
+			feedbackToastTimerRef.current = null;
+		}, 1400);
+	};
+
+	// 댓글 수정 상태를 초기화합니다.
+	const resetEditingReplyState = () => {
+		setEditingReplySeq(null);
+		setEditingReplyComment("");
+		setEditingReplyFiles([]);
+		setEditingDeleteReplyFileSeqList([]);
+	};
+
+	// 상세 응답을 반영하고 목록 카드도 함께 동기화합니다.
+	const applyDetailResponse = (nextDetailResponse: WorkDetailResponse | null) => {
+		setDetailResponse(nextDetailResponse);
+		setDetailEditForm(createDetailEditForm(nextDetailResponse?.detail ?? null));
+		const nextDetail = nextDetailResponse?.detail ?? null;
+		if (nextDetail) {
+			setListResponse((prevState) => applyUpdatedWorkRowToListResponse(prevState, createWorkListRowFromDetail(nextDetail)));
+		}
+	};
+
+	// 상태별 목록 응답을 반영하면서 선택 상태를 최대한 유지합니다.
+	const applyListResponse = (nextListResponse: WorkListResponse, preferredWorkSeq?: number | null) => {
+		setListResponse(nextListResponse);
+		setSelectedWorkSeq((previousWorkSeq) => {
+			const candidateWorkSeq = preferredWorkSeq ?? previousWorkSeq;
+			if (
+				candidateWorkSeq !== null &&
+				nextListResponse.statusSectionList.some((sectionItem) => sectionItem.list.some((rowItem) => rowItem.workSeq === candidateWorkSeq))
+			) {
+				return candidateWorkSeq;
+			}
+
+			const firstRow = nextListResponse.statusSectionList.find((sectionItem) => sectionItem.list.length > 0)?.list[0] ?? null;
+			return preferredWorkSeq ?? firstRow?.workSeq ?? null;
+		});
+	};
+
+	// 현재 필터 상태를 기준으로 업무 목록을 다시 조회합니다.
+	const loadWorkList = async (options: LoadWorkListOptions = {}) => {
+		const targetCompanySeq = typeof options.workCompanySeq === "number" ? options.workCompanySeq : selectedCompanySeq;
+		const targetProjectSeq = typeof options.workCompanyProjectSeq === "number" ? options.workCompanyProjectSeq : selectedProjectSeq;
+		const targetKeyword = typeof options.title === "string" ? options.title : searchKeyword;
+		const targetIncludeBodyYn = typeof options.includeBodyYn === "string" ? options.includeBodyYn : includeBodyYn;
+		const targetStatusCodeList = options.workStatCdList ?? selectedStatusCodeList;
+		if (typeof targetCompanySeq !== "number" || targetCompanySeq < 1 || typeof targetProjectSeq !== "number" || targetProjectSeq < 1) {
+			setListResponse({ statusSectionList: [] });
+			setSelectedWorkSeq(options.preferredWorkSeq ?? null);
+			return;
+		}
+
+		setIsListLoading(true);
+		setMessage("");
+		try {
+			// 회사/프로젝트/검색 조건 기준으로 상태별 첫 10건 목록을 조회합니다.
+			const result = await fetchWorkList({
+				workCompanySeq: targetCompanySeq,
+				workCompanyProjectSeq: targetProjectSeq,
+				title: targetKeyword,
+				includeBodyYn: targetIncludeBodyYn,
+				workStatCdList: targetStatusCodeList,
+				sectionSize: DEFAULT_SECTION_PAGE_SIZE,
+			});
+			if (!result.ok || !result.data) {
+				setMessage(result.message || "업무 목록을 불러오지 못했습니다.");
+				return;
+			}
+
+			applyListResponse(result.data, options.preferredWorkSeq);
+		} finally {
+			setIsListLoading(false);
+		}
+	};
+
+	// 선택 업무 상세를 다시 조회합니다.
+	const loadDetail = async (workSeq: number) => {
+		setIsDetailLoading(true);
+		setMessage("");
+		try {
+			// 업무 상세, 첨부, 댓글을 한 번에 조회해 우측 패널에 반영합니다.
+			const result = await fetchWorkDetail(workSeq);
+			if (!result.ok || !result.data) {
+				setMessage(result.message || "업무 상세를 불러오지 못했습니다.");
+				applyDetailResponse(null);
+				return;
+			}
+
+			applyDetailResponse(result.data);
+		} finally {
+			setIsDetailLoading(false);
+		}
+	};
+
+	// 즉시 수정 폼을 저장하고 최신 상세를 반영합니다.
+	const persistDetailForm = async (nextForm: DetailEditFormState) => {
+		if (nextForm.workSeq < 1) {
+			return;
+		}
+
+		setDetailEditForm(nextForm);
+		setIsDetailSaving(true);
+		setMessage("");
+		try {
+			// 입력 중인 폼 값을 그대로 저장하고 최신 상세 응답으로 덮어씁니다.
+			const result = await updateWorkDetail(buildDetailUpdateRequest(nextForm), []);
+			if (!result.ok || !result.data) {
+				setMessage(result.message || "업무 저장에 실패했습니다.");
+				return;
+			}
+
+			applyDetailResponse(result.data);
+			showFeedbackToast("업무를 저장했습니다.");
+		} finally {
+			setIsDetailSaving(false);
+		}
+	};
+
+	// 화면 진입 시 세션과 bootstrap 데이터를 확인합니다.
+	useEffect(() => {
+		let isCancelled = false;
+
+		// 세션을 복구한 뒤 첫 회사/프로젝트 기준으로 목록을 초기화합니다.
+		const initializePage = async () => {
+			const sessionResult = await refreshWorkSession();
+			if (isCancelled) {
+				return;
+			}
+			if (!sessionResult.ok || !sessionResult.data?.authenticated) {
+				await router.replace(`/work/login?returnUrl=${encodeURIComponent(resolveSafeReturnUrl(router.asPath || "/work"))}`);
+				return;
+			}
+
+			const bootstrapResult = await fetchWorkBootstrap();
+			if (isCancelled) {
+				return;
+			}
+			if (!bootstrapResult.ok || !bootstrapResult.data) {
+				setMessage(bootstrapResult.message || "업무 화면 초기 데이터를 불러오지 못했습니다.");
+				setIsInitializing(false);
+				return;
+			}
+
+			const initialCompanySeq = bootstrapResult.data.companyList[0]?.workCompanySeq ?? null;
+			const initialProjectSeq = bootstrapResult.data.projectList[0]?.workCompanyProjectSeq ?? null;
+			setBootstrap(bootstrapResult.data);
+			setProjectList(bootstrapResult.data.projectList ?? []);
+			setSelectedCompanySeq(initialCompanySeq);
+			setSelectedProjectSeq(initialProjectSeq);
+			setSelectedStatusCodeList([]);
+			setIsInitializing(false);
+
+			if (initialCompanySeq && initialProjectSeq) {
+				await loadWorkList({
+					workCompanySeq: initialCompanySeq,
+					workCompanyProjectSeq: initialProjectSeq,
+					title: "",
+					includeBodyYn: "N",
+					workStatCdList: [],
+				});
+			} else {
+				setListResponse({ statusSectionList: [] });
+			}
+		};
+
+		void initializePage();
+		return () => {
+			isCancelled = true;
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
+	// 선택 업무 번호가 바뀌면 상세를 다시 조회합니다.
+	useEffect(() => {
+		if (selectedWorkSeq === null) {
+			applyDetailResponse(null);
+			return;
+		}
+
+		void loadDetail(selectedWorkSeq);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [selectedWorkSeq]);
+
+	// 토스트 타이머를 컴포넌트 종료 시 정리합니다.
+	useEffect(() => {
+		return () => {
+			clearFeedbackToastTimer();
+		};
+	}, []);
+
+	// 상태 필터 드롭다운 외부 클릭과 ESC 닫기를 처리합니다.
+	useEffect(() => {
+		const handleDocumentMouseDown = (event: MouseEvent) => {
+			if (statusFilterRef.current?.contains(event.target as Node)) {
+				return;
+			}
+			setStatusFilterOpen(false);
+		};
+
+		const handleWindowKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				setStatusFilterOpen(false);
+				if (previewImageUrl !== "") {
+					setPreviewImageUrl("");
+				}
+			}
+		};
+
+		document.addEventListener("mousedown", handleDocumentMouseDown);
+		window.addEventListener("keydown", handleWindowKeyDown);
+		return () => {
+			document.removeEventListener("mousedown", handleDocumentMouseDown);
+			window.removeEventListener("keydown", handleWindowKeyDown);
+		};
+	}, [previewImageUrl]);
+
+	// 회사 선택이 바뀌면 프로젝트 목록을 다시 조회합니다.
+	const handleChangeCompany = async (event: ChangeEvent<HTMLSelectElement>) => {
+		const nextCompanySeq = Number(event.target.value) || null;
+		setSelectedCompanySeq(nextCompanySeq);
+		setSelectedProjectSeq(null);
+		setProjectList([]);
+		setSelectedWorkSeq(null);
+		applyDetailResponse(null);
+		if (!nextCompanySeq) {
+			setListResponse({ statusSectionList: [] });
+			return;
+		}
+
+		setIsActionPending(true);
+		setMessage("");
+		try {
+			// 회사 기준 프로젝트 목록을 조회하고 첫 프로젝트 기준 목록을 다시 로드합니다.
+			const result = await fetchWorkProjectList(nextCompanySeq);
+			if (!result.ok || !result.data) {
+				setMessage(result.message || "프로젝트 목록을 불러오지 못했습니다.");
+				return;
+			}
+
+			const nextProjectList = result.data;
+			const nextProjectSeq = nextProjectList[0]?.workCompanyProjectSeq ?? null;
+			setProjectList(nextProjectList);
+			setSelectedProjectSeq(nextProjectSeq);
+			await loadWorkList({
+				workCompanySeq: nextCompanySeq,
+				workCompanyProjectSeq: nextProjectSeq,
+				title: searchKeyword,
+				includeBodyYn,
+				workStatCdList: selectedStatusCodeList,
+			});
+		} finally {
+			setIsActionPending(false);
+		}
+	};
+
+	// 프로젝트 선택이 바뀌면 목록을 다시 조회합니다.
+	const handleChangeProject = async (event: ChangeEvent<HTMLSelectElement>) => {
+		const nextProjectSeq = Number(event.target.value) || null;
+		setSelectedProjectSeq(nextProjectSeq);
+		setSelectedWorkSeq(null);
+		applyDetailResponse(null);
+		await loadWorkList({
+			workCompanySeq: selectedCompanySeq,
+			workCompanyProjectSeq: nextProjectSeq,
+			title: searchKeyword,
+			includeBodyYn,
+			workStatCdList: selectedStatusCodeList,
+		});
+	};
+
+	// 검색 폼 제출 시 현재 검색어를 반영합니다.
+	const handleSubmitSearch = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		const nextKeyword = searchInput.trim();
+		setSearchKeyword(nextKeyword);
+		await loadWorkList({
+			workCompanySeq: selectedCompanySeq,
+			workCompanyProjectSeq: selectedProjectSeq,
+			title: nextKeyword,
+			includeBodyYn,
+			workStatCdList: selectedStatusCodeList,
+		});
+	};
+
+	// 상태 필터 항목을 토글하고 목록을 즉시 다시 조회합니다.
+	const handleToggleStatusCode = async (workStatCd: string) => {
+		const nextStatusCodeList = selectedStatusCodeList.includes(workStatCd)
+			? selectedStatusCodeList.filter((codeItem) => codeItem !== workStatCd)
+			: [...selectedStatusCodeList, workStatCd];
+		setSelectedStatusCodeList(nextStatusCodeList);
+		await loadWorkList({
+			workCompanySeq: selectedCompanySeq,
+			workCompanyProjectSeq: selectedProjectSeq,
+			title: searchKeyword,
+			includeBodyYn,
+			workStatCdList: nextStatusCodeList,
+		});
+	};
+
+	// 상태 필터 전체 선택을 적용합니다.
+	const handleSelectAllStatusCodes = async () => {
+		const nextStatusCodeList = workStatList.map((codeItem) => codeItem.cd);
+		setSelectedStatusCodeList(nextStatusCodeList);
+		await loadWorkList({
+			workCompanySeq: selectedCompanySeq,
+			workCompanyProjectSeq: selectedProjectSeq,
+			title: searchKeyword,
+			includeBodyYn,
+			workStatCdList: nextStatusCodeList,
+		});
+	};
+
+	// 상태 필터를 모두 해제합니다.
+	const handleClearStatusCodes = async () => {
+		setSelectedStatusCodeList([]);
+		await loadWorkList({
+			workCompanySeq: selectedCompanySeq,
+			workCompanyProjectSeq: selectedProjectSeq,
+			title: searchKeyword,
+			includeBodyYn,
+			workStatCdList: [],
+		});
+	};
+
+	// 상태 섹션 더보기를 처리합니다.
+	const handleLoadMoreSection = async (workStatCd: string) => {
+		if (!selectedCompanySeq || !selectedProjectSeq) {
+			return;
+		}
+
+		const targetSection = listResponse?.statusSectionList.find((sectionItem) => sectionItem.workStatCd === workStatCd);
+		if (!targetSection) {
+			return;
+		}
+
+		setSectionLoadingMap((prevState) => ({ ...prevState, [workStatCd]: true }));
+		setMessage("");
+		try {
+			// 특정 상태 코드의 다음 10건을 추가 조회해 기존 목록 뒤에 붙입니다.
+			const result = await fetchWorkSectionMore({
+				workCompanySeq: selectedCompanySeq,
+				workCompanyProjectSeq: selectedProjectSeq,
+				title: searchKeyword,
+				includeBodyYn,
+				workStatCd,
+				offset: targetSection.list.length,
+				limit: DEFAULT_SECTION_PAGE_SIZE,
+			});
+			if (!result.ok || !result.data) {
+				setMessage(result.message || "추가 업무 목록을 불러오지 못했습니다.");
+				return;
+			}
+			const nextSectionPage = result.data;
+
+			setListResponse((prevState) => {
+				if (!prevState) {
+					return prevState;
+				}
+				return {
+					statusSectionList: prevState.statusSectionList.map((sectionItem) => {
+						if (sectionItem.workStatCd !== workStatCd) {
+							return sectionItem;
+						}
+						const existingWorkSeqSet = new Set(sectionItem.list.map((rowItem) => rowItem.workSeq));
+						const mergedList = sortWorkListRowsByCreateDt([
+							...sectionItem.list,
+							...nextSectionPage.list.filter((rowItem) => !existingWorkSeqSet.has(rowItem.workSeq)),
+						]);
+						return {
+							...sectionItem,
+							list: mergedList,
+							totalCount: nextSectionPage.totalCount,
+							hasMore: nextSectionPage.hasMore,
+						};
+					}),
+				};
+			});
+		} finally {
+			setSectionLoadingMap((prevState) => ({ ...prevState, [workStatCd]: false }));
+		}
+	};
+
+	// 로그아웃 후 로그인 화면으로 이동합니다.
+	const handleClickLogout = async () => {
+		setIsActionPending(true);
+		try {
+			await logoutWork();
+			await router.replace("/work/login?returnUrl=%2Fwork");
+		} finally {
+			setIsActionPending(false);
+		}
+	};
+
+	// 공수 입력 변경을 로컬 폼 상태에 반영합니다.
+	const handleChangeDetailField = (fieldName: "workTime", value: string) => {
+		setDetailEditForm((prevState) => ({
+			...prevState,
+			[fieldName]: value,
+		}));
+	};
+
+	// blur 또는 Enter 시 공수 입력을 저장합니다.
+	const handleCommitDetailField = async (fieldName: "workTime") => {
+		const nextForm = {
+			...detailEditForm,
+			[fieldName]: detailEditForm[fieldName],
+		};
+		await persistDetailForm(nextForm);
+	};
+
+	// 텍스트 입력 Enter 저장을 처리합니다.
+	const handleKeyDownCommitInput = async (
+		event: ReactKeyboardEvent<HTMLInputElement>,
+		fieldName: "workTime",
+	) => {
+		if (event.key !== "Enter") {
+			return;
+		}
+		event.preventDefault();
+		await handleCommitDetailField(fieldName);
+	};
+
+	// 상태/일시 입력은 변경 즉시 저장합니다.
+	const handleChangeAndPersistDetailField = async (
+		fieldName: "workStatCd" | "workStartDt" | "workEndDt",
+		value: string,
+	) => {
+		const nextForm = {
+			...detailEditForm,
+			[fieldName]: value,
+		};
+		await persistDetailForm(nextForm);
+	};
+
+	// 댓글 신규 첨부파일 선택을 처리합니다.
+	const handleChangeReplyFiles = (event: ChangeEvent<HTMLInputElement>) => {
+		const nextFileList = Array.from(event.target.files || []);
+		if (nextFileList.length < 1) {
+			return;
+		}
+		setReplyFiles((prevState) => [...prevState, ...nextFileList]);
+		event.target.value = "";
+	};
+
+	// 댓글 신규 첨부파일을 목록에서 제거합니다.
+	const handleRemoveReplyFile = (targetIndex: number) => {
+		setReplyFiles((prevState) => prevState.filter((_, fileIndex) => fileIndex !== targetIndex));
+	};
+
+	// 댓글을 저장합니다.
+	const handleSaveReply = async () => {
+		if (!selectedDetail) {
+			return;
+		}
+		if (!hasVisibleEditorText(replyComment) && replyFiles.length < 1) {
+			setMessage("댓글 내용 또는 첨부파일을 등록해주세요.");
+			return;
+		}
+
+		setIsReplySaving(true);
+		setMessage("");
+		try {
+			// Quill HTML 댓글과 첨부파일을 저장한 뒤 상세를 다시 조회합니다.
+			const result = await createWorkReply({
+				workSeq: selectedDetail.workSeq,
+				replyComment,
+			}, replyFiles);
+			if (!result.ok || !result.data) {
+				setMessage(result.message || "댓글 등록에 실패했습니다.");
+				return;
+			}
+
+			setReplyComment("");
+			setReplyFiles([]);
+			if (replyFileInputRef.current) {
+				replyFileInputRef.current.value = "";
+			}
+			await loadDetail(selectedDetail.workSeq);
+			showFeedbackToast("댓글을 등록했습니다.");
+		} finally {
+			setIsReplySaving(false);
+		}
+	};
+
+	// 댓글 수정 모드를 시작합니다.
+	const handleStartEditReply = (reply: WorkReply) => {
+		setEditingReplySeq(reply.replySeq);
+		setEditingReplyComment(reply.replyComment || "");
+		setEditingReplyFiles([]);
+		setEditingDeleteReplyFileSeqList([]);
+	};
+
+	// 댓글 수정 신규 첨부파일 선택을 처리합니다.
+	const handleChangeEditingReplyFiles = (event: ChangeEvent<HTMLInputElement>) => {
+		const nextFileList = Array.from(event.target.files || []);
+		if (nextFileList.length < 1) {
+			return;
+		}
+		setEditingReplyFiles((prevState) => [...prevState, ...nextFileList]);
+		event.target.value = "";
+	};
+
+	// 댓글 수정 신규 첨부파일을 목록에서 제거합니다.
+	const handleRemoveEditingReplyFile = (targetIndex: number) => {
+		setEditingReplyFiles((prevState) => prevState.filter((_, fileIndex) => fileIndex !== targetIndex));
+	};
+
+	// 기존 댓글 첨부파일 삭제 대상을 토글합니다.
+	const handleToggleDeleteEditingReplyFile = (replyFileSeq: number) => {
+		setEditingDeleteReplyFileSeqList((prevState) => (
+			prevState.includes(replyFileSeq)
+				? prevState.filter((targetSeq) => targetSeq !== replyFileSeq)
+				: [...prevState, replyFileSeq]
+		));
+	};
+
+	// 댓글 수정 저장을 처리합니다.
+	const handleUpdateReply = async (reply: WorkReply) => {
+		const activeExistingFileCount = reply.replyFileList.filter(
+			(fileItem) => !editingDeleteReplyFileSeqList.includes(fileItem.replyFileSeq),
+		).length;
+		if (!hasVisibleEditorText(editingReplyComment) && activeExistingFileCount < 1 && editingReplyFiles.length < 1) {
+			setMessage("댓글 내용 또는 첨부파일을 등록해주세요.");
+			return;
+		}
+
+		setIsReplySaving(true);
+		setMessage("");
+		try {
+			// 댓글 수정 내용과 삭제/추가 첨부를 함께 저장한 뒤 상세를 다시 로드합니다.
+			const result = await updateWorkReply({
+				replySeq: reply.replySeq,
+				workSeq: reply.workSeq,
+				replyComment: editingReplyComment,
+				deleteReplyFileSeqList: editingDeleteReplyFileSeqList,
+			}, editingReplyFiles);
+			if (!result.ok || !result.data) {
+				setMessage(result.message || "댓글 수정에 실패했습니다.");
+				return;
+			}
+
+			resetEditingReplyState();
+			await loadDetail(reply.workSeq);
+			showFeedbackToast("댓글을 수정했습니다.");
+		} finally {
+			setIsReplySaving(false);
+		}
+	};
+
+	// 댓글 삭제를 처리합니다.
+	const handleDeleteReply = async (reply: WorkReply) => {
+		setIsReplySaving(true);
+		setMessage("");
+		try {
+			// 댓글을 삭제하고 상세 및 댓글 수를 최신 상태로 맞춥니다.
+			const result = await deleteWorkReply({
+				replySeq: reply.replySeq,
+				workSeq: reply.workSeq,
+			});
+			if (!result.ok) {
+				setMessage(result.message || "댓글 삭제에 실패했습니다.");
+				return;
+			}
+
+			if (editingReplySeq === reply.replySeq) {
+				resetEditingReplyState();
+			}
+			await loadDetail(reply.workSeq);
+			showFeedbackToast("댓글을 삭제했습니다.");
+		} finally {
+			setIsReplySaving(false);
+		}
+	};
+
+	// 댓글 첨부파일 다운로드를 처리합니다.
+	const handleDownloadReplyFile = async (replyFile: WorkReplyFile) => {
+		try {
+			// 댓글 첨부 다운로드 API 호출 뒤 브라우저 다운로드를 시작합니다.
+			const downloadData = await downloadWorkReplyFile(replyFile.replyFileSeq);
+			triggerBrowserFileDownload(downloadData.blob, downloadData.fileName || replyFile.replyFileNm || "reply-file");
+		} catch (errorObject) {
+			console.error("댓글 첨부파일 다운로드에 실패했습니다.", errorObject);
+			setMessage("댓글 첨부파일 다운로드에 실패했습니다.");
+		}
+	};
+
+	// 수기 등록 선택 파일을 갱신합니다.
+	const handleChangeManualFiles = (event: ChangeEvent<HTMLInputElement>) => {
+		const nextFileList = Array.from(event.target.files || []);
+		if (nextFileList.length < 1) {
+			return;
+		}
+		setManualFiles((prevState) => [...prevState, ...nextFileList]);
+		event.target.value = "";
+	};
+
+	// 수기 등록 선택 파일을 제거합니다.
+	const handleRemoveManualFile = (targetIndex: number) => {
+		setManualFiles((prevState) => prevState.filter((_, fileIndex) => fileIndex !== targetIndex));
+	};
+
+	// 수기 등록 저장을 처리합니다.
+	const handleSubmitManualCreate = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		if (!selectedCompanySeq || !selectedProjectSeq) {
+			setMessage("회사와 프로젝트를 선택해주세요.");
+			return;
+		}
+		if (trimText(manualForm.title) === "") {
+			setMessage("타이틀을 입력해주세요.");
+			return;
+		}
+		if (trimText(manualForm.workPriorCd) === "") {
+			setMessage("우선순위를 선택해주세요.");
+			return;
+		}
+
+		setIsManualSaving(true);
+		setMessage("");
+		try {
+			// 선택 회사/프로젝트 기준으로 수기 업무를 등록합니다.
+			const result = await createWorkManual({
+				workCompanySeq: selectedCompanySeq,
+				workCompanyProjectSeq: selectedProjectSeq,
+				title: manualForm.title,
+				content: manualForm.content,
+				coManager: manualForm.coManager,
+				workPriorCd: manualForm.workPriorCd,
+			}, manualFiles);
+			if (!result.ok || !result.data) {
+				setMessage(result.message || "업무 수기 등록에 실패했습니다.");
+				return;
+			}
+
+			setIsManualModalOpen(false);
+			setManualForm(createEmptyManualCreateForm());
+			setManualFiles([]);
+			await loadWorkList({
+				workCompanySeq: selectedCompanySeq,
+				workCompanyProjectSeq: selectedProjectSeq,
+				title: searchKeyword,
+				includeBodyYn,
+				workStatCdList: selectedStatusCodeList,
+				preferredWorkSeq: result.data.workSeq,
+			});
+			showFeedbackToast("업무를 등록했습니다.");
+		} finally {
+			setIsManualSaving(false);
+		}
+	};
+
+	// SR 가져오기를 실행합니다.
+	const handleSubmitImport = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		if (!selectedCompanySeq || !selectedProjectSeq) {
+			setMessage("회사와 프로젝트를 선택해주세요.");
+			return;
+		}
+		if (trimText(importWorkKey) === "") {
+			setMessage("업무 키를 입력해주세요.");
+			return;
+		}
+
+		setIsImportSaving(true);
+		setMessage("");
+		try {
+			// 업무 키 기준으로 SR 업무를 가져와 현재 회사/프로젝트에 저장합니다.
+			const command: WorkImportRequest = {
+				workCompanySeq: selectedCompanySeq,
+				workCompanyProjectSeq: selectedProjectSeq,
+				workKey: trimText(importWorkKey),
+			};
+			const result = await importWork(command);
+			if (!result.ok || !result.data) {
+				setMessage(result.message || "SR 가져오기에 실패했습니다.");
+				return;
+			}
+
+			setIsImportModalOpen(false);
+			setImportWorkKey("");
+			await loadWorkList({
+				workCompanySeq: selectedCompanySeq,
+				workCompanyProjectSeq: selectedProjectSeq,
+				title: searchKeyword,
+				includeBodyYn,
+				workStatCdList: selectedStatusCodeList,
+				preferredWorkSeq: result.data.workSeq,
+			});
+			showFeedbackToast("SR 업무를 가져왔습니다.");
+		} finally {
+			setIsImportSaving(false);
+		}
+	};
+
+	// 업무 첨부를 새 창 다운로드로 엽니다.
+	const handleOpenWorkFile = (fileItem: WorkFile) => {
+		if (!fileItem.workJobFileUrl) {
+			return;
+		}
+		window.open(fileItem.workJobFileUrl, "_blank", "noopener,noreferrer");
+	};
+
+	// 댓글 수정 가능 여부를 판단합니다.
+	const canEditReply = (reply: WorkReply): boolean => {
+		return currentUser?.usrNo === reply.regNo;
+	};
+
+	// 업무 첨부 타일을 렌더링합니다.
+	const renderWorkFileTile = (fileItem: WorkFile) => (
+		<div key={fileItem.workJobFileSeq} className={styles.fileTile}>
+			{isImageWorkFile(fileItem) && fileItem.workJobFileUrl ? (
+				<button type="button" className={styles.filePreviewButton} onClick={() => setPreviewImageUrl(fileItem.workJobFileUrl)}>
+					{/* eslint-disable-next-line @next/next/no-img-element */}
+					<img src={fileItem.workJobFileUrl} alt={fileItem.workJobFileNm || "업무 첨부 이미지"} className={styles.filePreviewImage} />
+				</button>
+			) : (
+				<button type="button" className={styles.filePreviewFallback} onClick={() => handleOpenWorkFile(fileItem)}>
+					FILE
+				</button>
+			)}
+			<button type="button" className={styles.fileNameButton} onClick={() => handleOpenWorkFile(fileItem)}>
+				{fileItem.workJobFileNm || "첨부파일"}
+			</button>
+		</div>
+	);
+
+	// 댓글 읽기 전용 첨부 타일을 렌더링합니다.
+	const renderReplyFileTile = (fileItem: WorkReplyFile) => (
+		<div key={fileItem.replyFileSeq} className={styles.fileTile}>
+			{isImageReplyFile(fileItem) && fileItem.replyFileUrl ? (
+				<button type="button" className={styles.filePreviewButton} onClick={() => setPreviewImageUrl(fileItem.replyFileUrl)}>
+					{/* eslint-disable-next-line @next/next/no-img-element */}
+					<img src={fileItem.replyFileUrl} alt={fileItem.replyFileNm || "댓글 첨부 이미지"} className={styles.filePreviewImage} />
+				</button>
+			) : (
+				<button type="button" className={styles.filePreviewFallback} onClick={() => void handleDownloadReplyFile(fileItem)}>
+					FILE
+				</button>
+			)}
+			<button type="button" className={styles.fileNameButton} onClick={() => void handleDownloadReplyFile(fileItem)}>
+				{fileItem.replyFileNm || "첨부파일"}
+			</button>
+		</div>
+	);
+
+	// 로컬 선택 파일 타일을 렌더링합니다.
+	const renderSelectedFileTile = (fileItem: File, key: string, onRemove: () => void) => (
+		<div key={key} className={styles.fileTile}>
+			<div className={styles.filePreviewFallback}>{isImageSelectedFile(fileItem) ? "IMG" : "FILE"}</div>
+			<div className={styles.fileNameLabel}>{fileItem.name || "선택 파일"}</div>
+			<button type="button" className={styles.fileDeleteButton} onClick={onRemove}>
+				제거
+			</button>
+		</div>
+	);
+
+	// 댓글 수정 중 기존 첨부 타일을 렌더링합니다.
+	const renderEditingReplyFileTile = (fileItem: WorkReplyFile) => {
+		const isDeleted = editingDeleteReplyFileSeqList.includes(fileItem.replyFileSeq);
+		return (
+			<div key={fileItem.replyFileSeq} className={`${styles.fileTile} ${isDeleted ? styles.fileTileDimmed : ""}`}>
+				{isImageReplyFile(fileItem) && fileItem.replyFileUrl ? (
+					<button type="button" className={styles.filePreviewButton} onClick={() => setPreviewImageUrl(fileItem.replyFileUrl)}>
+						{/* eslint-disable-next-line @next/next/no-img-element */}
+						<img src={fileItem.replyFileUrl} alt={fileItem.replyFileNm || "댓글 첨부 이미지"} className={styles.filePreviewImage} />
+					</button>
+				) : (
+					<button type="button" className={styles.filePreviewFallback} onClick={() => void handleDownloadReplyFile(fileItem)}>
+						FILE
+					</button>
+				)}
+				<button type="button" className={styles.fileNameButton} onClick={() => void handleDownloadReplyFile(fileItem)}>
+					{fileItem.replyFileNm || "첨부파일"}
+				</button>
+				<button
+					type="button"
+					className={styles.fileDeleteButton}
+					onClick={() => handleToggleDeleteEditingReplyFile(fileItem.replyFileSeq)}
+					disabled={isReplySaving}
+				>
+					{isDeleted ? "삭제취소" : "삭제"}
+				</button>
+			</div>
+		);
+	};
+
+	return (
+		<>
+			<Head>
+				<title>업무관리</title>
+				<meta name="description" content="react-resume 업무관리 작업 화면" />
+			</Head>
+
+			<div className={styles.pageShell}>
+				{message !== "" ? <p className={styles.messageBar}>{message}</p> : null}
+				<div className={`${styles.feedbackToast} ${isFeedbackToastVisible ? styles.feedbackToastVisible : ""}`}>
+					{feedbackToastMessage}
+				</div>
+
+				{isInitializing ? (
+					<p className={styles.loadingText}>업무 화면을 준비하고 있습니다.</p>
+				) : (
+					<div className={styles.workspaceShell}>
+						<aside className={styles.sidebar}>
+							<div className={styles.sidebarTop}>
+								<div className={styles.selectRow}>
+									<select className={styles.sidebarFieldControl} value={selectedCompanySeq ?? ""} onChange={(event) => void handleChangeCompany(event)} disabled={isActionPending}>
+										<option value="">회사 선택</option>
+										{bootstrap?.companyList.map((companyItem) => (
+											<option key={companyItem.workCompanySeq} value={companyItem.workCompanySeq}>
+												{companyItem.workCompanyNm}
+											</option>
+										))}
+									</select>
+									<select className={styles.sidebarFieldControl} value={selectedProjectSeq ?? ""} onChange={(event) => void handleChangeProject(event)} disabled={isActionPending || projectList.length < 1}>
+										<option value="">프로젝트 선택</option>
+										{projectList.map((projectItem) => (
+											<option key={projectItem.workCompanyProjectSeq} value={projectItem.workCompanyProjectSeq}>
+												{projectItem.workCompanyProjectNm}
+											</option>
+										))}
+									</select>
+								</div>
+
+								<form className={styles.searchForm} onSubmit={(event) => void handleSubmitSearch(event)}>
+									<div className={styles.searchInlineRow}>
+										<input
+											type="text"
+											value={searchInput}
+											onChange={(event) => setSearchInput(event.target.value)}
+											className={styles.searchInput}
+											placeholder="업무 제목 또는 키워드 검색"
+										/>
+										<button type="submit" className={styles.searchButton} disabled={isListLoading}>
+											검색
+										</button>
+									</div>
+
+								<div className={styles.searchSubRow}>
+										<label className={styles.includeBodyLabel}>
+											<input
+												type="checkbox"
+												checked={includeBodyYn === "Y"}
+												onChange={(event) => setIncludeBodyYn(event.target.checked ? "Y" : "N")}
+											/>
+											본문 포함 검색
+										</label>
+
+										<div className={styles.statusComboShell} ref={statusFilterRef}>
+											<button type="button" className={styles.statusComboButton} onClick={() => setStatusFilterOpen((prevState) => !prevState)}>
+												{statusFilterButtonLabel}
+											</button>
+											{statusFilterOpen ? (
+												<div className={styles.statusComboPanel}>
+													<div className={styles.statusComboActions}>
+														<button type="button" className={styles.comboActionButton} onClick={() => void handleSelectAllStatusCodes()}>
+															전체 선택
+														</button>
+														<button type="button" className={styles.comboActionButton} onClick={() => void handleClearStatusCodes()}>
+															전체 해제
+														</button>
+													</div>
+													<div className={styles.statusOptionList}>
+														{workStatList.map((codeItem) => (
+															<label key={codeItem.cd} className={styles.statusOptionItem}>
+																<input
+																	type="checkbox"
+																	checked={selectedStatusCodeList.includes(codeItem.cd)}
+																	onChange={() => void handleToggleStatusCode(codeItem.cd)}
+																/>
+																<span className={styles.statusOptionText}>{codeItem.cdNm}</span>
+															</label>
+														))}
+													</div>
+												</div>
+											) : null}
+										</div>
+									</div>
+								</form>
+							</div>
+
+							<div className={styles.sidebarListSection}>
+								{isListLoading ? <p className={styles.loadingText}>업무 목록을 불러오고 있습니다.</p> : null}
+								{!isListLoading && visibleStatusSectionList.length < 1 ? (
+									<div className={styles.emptyState}>조회된 업무가 없습니다.</div>
+								) : null}
+								{visibleStatusSectionList.map((sectionItem) => (
+									<section key={sectionItem.workStatCd} className={styles.statusSectionBlock}>
+										<div className={styles.statusSectionHeader}>
+											<h2 className={styles.statusSectionTitle}>{resolveStatusName(sectionItem.workStatCd, workStatList)}</h2>
+											<span className={styles.statusSectionCount}>
+												{sectionItem.list.length}/{sectionItem.totalCount}
+											</span>
+										</div>
+										<div className={styles.statusSectionList}>
+											{sectionItem.list.map((rowItem) => (
+												<button
+													key={rowItem.workSeq}
+													type="button"
+													className={`${styles.workCard} ${selectedWorkSeq === rowItem.workSeq ? styles.workCardActive : ""}`}
+													onClick={() => setSelectedWorkSeq(rowItem.workSeq)}
+												>
+													<span className={styles.workCardTitle}>{rowItem.title || rowItem.workKey || "제목 없음"}</span>
+												</button>
+											))}
+										</div>
+										{sectionItem.hasMore ? (
+											<button
+												type="button"
+												className={styles.loadMoreButton}
+												onClick={() => void handleLoadMoreSection(sectionItem.workStatCd)}
+												disabled={Boolean(sectionLoadingMap[sectionItem.workStatCd])}
+											>
+												{sectionLoadingMap[sectionItem.workStatCd] ? "불러오는 중..." : "더보기"}
+											</button>
+										) : null}
+									</section>
+								))}
+							</div>
+
+							<div className={styles.sidebarBottom}>
+								<div className={styles.sidebarBottomRow}>
+									<button type="button" className={styles.secondaryButton} onClick={() => setIsManualModalOpen(true)}>
+										수기등록
+									</button>
+									<button type="button" className={styles.secondaryButton} onClick={() => setIsImportModalOpen(true)}>
+										SR 가져오기
+									</button>
+								</div>
+								<button type="button" className={styles.logoutButton} onClick={() => void handleClickLogout()} disabled={isActionPending}>
+									로그아웃
+								</button>
+							</div>
+						</aside>
+
+						<main className={styles.detailPanel}>
+							{isDetailLoading ? <p className={styles.loadingText}>업무 상세를 불러오고 있습니다.</p> : null}
+							{!isDetailLoading && !selectedDetail ? (
+								<div className={styles.emptyDetailState}>좌측 목록에서 업무를 선택하면 상세를 바로 수정할 수 있습니다.</div>
+							) : null}
+							{selectedDetail ? (
+								<div className={styles.detailContent}>
+									<div className={styles.detailHeader}>
+										<div className={styles.detailHeaderMeta}>
+											<p className={styles.detailKey}>{selectedDetail.workKey || "WORK"}</p>
+											<p className={styles.detailPath}>
+												{selectedDetail.workCompanyNm} / {selectedDetail.workCompanyProjectNm}
+											</p>
+										</div>
+										<div className={styles.detailSavingText}>{isDetailSaving ? "저장 중..." : "상태/일정/공수 수정"}</div>
+									</div>
+
+									<div className={styles.detailTitleBlock}>
+										<h1 className={styles.detailTitleText}>{detailEditForm.title || "제목 없음"}</h1>
+									</div>
+
+									<div className={styles.metaRows}>
+										<div className={styles.metaRow}>
+											<div className={styles.metaInlineField}>
+												<span className={styles.metaLabel}>IT담당자</span>
+												<div className={styles.metaValueShell}>
+													<span className={styles.metaReadonlyValue}>{selectedDetail.itManager || "-"}</span>
+												</div>
+											</div>
+											<div className={styles.metaInlineField}>
+												<span className={styles.metaLabel}>업무담당자</span>
+												<div className={styles.metaValueShell}>
+													<span className={styles.metaReadonlyValue}>{detailEditForm.coManager || "-"}</span>
+												</div>
+											</div>
+											<div className={styles.metaInlineField}>
+												<span className={styles.metaLabel}>업무생성일시</span>
+												<div className={styles.metaValueShell}>
+													<span className={styles.metaReadonlyValue}>{detailEditForm.workCreateDt || "-"}</span>
+												</div>
+											</div>
+										</div>
+
+										<div className={`${styles.metaRow} ${styles.metaRowCompact}`}>
+											<div className={styles.metaInlineField}>
+												<span className={styles.metaLabel}>상태</span>
+												<div className={styles.metaControl}>
+													<select
+														className={styles.metaSelect}
+														value={detailEditForm.workStatCd}
+														onChange={(event) => void handleChangeAndPersistDetailField("workStatCd", event.target.value)}
+													>
+														{workStatList.map((codeItem) => (
+															<option key={codeItem.cd} value={codeItem.cd}>
+																{codeItem.cdNm}
+															</option>
+														))}
+													</select>
+												</div>
+											</div>
+											<div className={styles.metaInlineField}>
+												<span className={styles.metaLabel}>업무 시작일시</span>
+												<div className={styles.metaControl}>
+													<AdminDateInput
+														className={styles.metaDateInput}
+														wrapperClassName={styles.metaDateInputWrapper}
+														value={detailEditForm.workStartDt}
+														onChange={(event) => void handleChangeAndPersistDetailField("workStartDt", event.target.value)}
+													/>
+												</div>
+											</div>
+											<div className={styles.metaInlineField}>
+												<span className={styles.metaLabel}>업무 종료일시</span>
+												<div className={styles.metaControl}>
+													<AdminDateInput
+														className={styles.metaDateInput}
+														wrapperClassName={styles.metaDateInputWrapper}
+														value={detailEditForm.workEndDt}
+														onChange={(event) => void handleChangeAndPersistDetailField("workEndDt", event.target.value)}
+													/>
+												</div>
+											</div>
+											<div className={styles.metaInlineField}>
+												<span className={styles.metaLabel}>공수</span>
+												<div className={styles.metaControl}>
+													<input
+														type="number"
+														min="0"
+														className={styles.metaInput}
+														value={detailEditForm.workTime}
+														onChange={(event) => handleChangeDetailField("workTime", event.target.value)}
+														onBlur={() => void handleCommitDetailField("workTime")}
+														onKeyDown={(event) => void handleKeyDownCommitInput(event, "workTime")}
+													/>
+												</div>
+											</div>
+										</div>
+									</div>
+
+									<section className={styles.detailSection}>
+										<div className={styles.sectionHeader}>
+											<h2 className={styles.sectionTitle}>본문</h2>
+											<span className={styles.sectionHint}>읽기 전용</span>
+										</div>
+										<WorkReadonlyHtml
+											value={detailEditForm.content}
+											emptyText="등록된 본문이 없습니다."
+											className={`${styles.readonlyContent} quill-content`}
+										/>
+									</section>
+
+									<section className={styles.detailSection}>
+										<div className={styles.sectionHeader}>
+											<h2 className={styles.sectionTitle}>첨부파일</h2>
+											<span className={styles.sectionHint}>읽기 전용 첨부</span>
+										</div>
+										{(detailResponse?.fileList.length ?? 0) < 1 ? (
+											<div className={styles.emptyState}>첨부파일이 없습니다.</div>
+										) : (
+											<div className={styles.fileTileGrid}>
+												{detailResponse?.fileList.map((fileItem) => renderWorkFileTile(fileItem))}
+											</div>
+										)}
+									</section>
+
+									<section className={styles.detailSection}>
+										<div className={styles.sectionHeader}>
+											<h2 className={styles.sectionTitle}>댓글쓰기</h2>
+											<span className={styles.sectionHint}>react-quill-new 적용</span>
+										</div>
+										<div className={styles.replyEditorShell}>
+											<div className={styles.quillShell}>
+												<LazyQuillEditor
+													id="work-reply-editor"
+													ref={replyQuill.quillRef}
+													theme="snow"
+													value={replyComment}
+													onChange={replyQuill.handleEditorChange}
+													modules={replyQuill.quillModules}
+													formats={replyQuill.quillFormats}
+												/>
+											</div>
+											<div className={styles.fileTileGrid}>
+												{replyFiles.map((fileItem, fileIndex) => renderSelectedFileTile(fileItem, `reply-${fileIndex}`, () => handleRemoveReplyFile(fileIndex)))}
+												<button type="button" className={`${styles.fileTile} ${styles.fileTileAdd}`} onClick={() => replyFileInputRef.current?.click()}>
+													<span className={styles.fileAddIcon}>+</span>
+													<span className={styles.fileNameLabel}>댓글 파일</span>
+												</button>
+											</div>
+											<input ref={replyFileInputRef} type="file" multiple className={styles.hiddenFileInput} onChange={handleChangeReplyFiles} />
+											<div className={styles.replyActionRow}>
+												<button type="button" className={styles.primaryButton} onClick={() => void handleSaveReply()} disabled={isReplySaving}>
+													{isReplySaving ? "저장 중..." : "댓글 등록"}
+												</button>
+											</div>
+										</div>
+									</section>
+
+									<section className={styles.detailSection}>
+										<div className={styles.sectionHeader}>
+											<h2 className={styles.sectionTitle}>댓글 목록</h2>
+											<span className={styles.sectionHint}>{detailResponse?.replyList.length ?? 0}개</span>
+										</div>
+										{(detailResponse?.replyList.length ?? 0) < 1 ? (
+											<div className={styles.emptyState}>등록된 댓글이 없습니다.</div>
+										) : (
+											<div className={styles.replyList}>
+												{detailResponse?.replyList.map((replyItem) => (
+													<article key={replyItem.replySeq} className={styles.replyCard}>
+														<div className={styles.replyHeader}>
+															<div className={styles.replyMeta}>
+																<span>등록 {replyItem.regDt || "-"}</span>
+																<span>수정 {replyItem.udtDt || "-"}</span>
+															</div>
+															{canEditReply(replyItem) ? (
+																<div className={styles.replyHeaderActions}>
+																	<button type="button" className={styles.inlineActionButton} onClick={() => handleStartEditReply(replyItem)}>
+																		수정
+																	</button>
+																	<button type="button" className={styles.inlineDangerButton} onClick={() => void handleDeleteReply(replyItem)} disabled={isReplySaving}>
+																		삭제
+																	</button>
+																</div>
+															) : null}
+														</div>
+
+														{editingReplySeq === replyItem.replySeq ? (
+															<div className={styles.replyEditShell}>
+																<div className={styles.quillShell}>
+																	<LazyQuillEditor
+																		id={editingReplyEditorId}
+																		ref={editingReplyQuill.quillRef}
+																		theme="snow"
+																		value={editingReplyComment}
+																		onChange={editingReplyQuill.handleEditorChange}
+																		modules={editingReplyQuill.quillModules}
+																		formats={editingReplyQuill.quillFormats}
+																	/>
+																</div>
+																<div className={styles.fileTileGrid}>
+																	{replyItem.replyFileList.map((fileItem) => renderEditingReplyFileTile(fileItem))}
+																	{editingReplyFiles.map((fileItem, fileIndex) => renderSelectedFileTile(fileItem, `editing-${fileIndex}`, () => handleRemoveEditingReplyFile(fileIndex)))}
+																	<button type="button" className={`${styles.fileTile} ${styles.fileTileAdd}`} onClick={() => editingReplyFileInputRef.current?.click()}>
+																		<span className={styles.fileAddIcon}>+</span>
+																		<span className={styles.fileNameLabel}>첨부 추가</span>
+																	</button>
+																</div>
+																<input ref={editingReplyFileInputRef} type="file" multiple className={styles.hiddenFileInput} onChange={handleChangeEditingReplyFiles} />
+																<div className={styles.replyActionRow}>
+																	<button type="button" className={styles.primaryButton} onClick={() => void handleUpdateReply(replyItem)} disabled={isReplySaving}>
+																		{isReplySaving ? "저장 중..." : "수정 저장"}
+																	</button>
+																	<button type="button" className={styles.secondaryButton} onClick={resetEditingReplyState} disabled={isReplySaving}>
+																		취소
+																	</button>
+																</div>
+															</div>
+														) : (
+															<>
+																<WorkReadonlyHtml
+																	value={replyItem.replyComment || ""}
+																	emptyText={replyItem.replyFileList.length > 0 ? "첨부파일만 등록된 댓글입니다." : "댓글 내용이 없습니다."}
+																	className={`${styles.replyContent} quill-content`}
+																/>
+																{replyItem.replyFileList.length > 0 ? (
+																	<div className={styles.fileTileGrid}>
+																		{replyItem.replyFileList.map((fileItem) => renderReplyFileTile(fileItem))}
+																	</div>
+																) : null}
+															</>
+														)}
+													</article>
+												))}
+											</div>
+										)}
+									</section>
+								</div>
+							) : null}
+						</main>
+					</div>
+				)}
+
+				{isManualModalOpen ? (
+					<WorkModalShell title="업무 수기등록" onClose={() => !isManualSaving && setIsManualModalOpen(false)}>
+						<form className={styles.modalForm} onSubmit={(event) => void handleSubmitManualCreate(event)}>
+							<label className={styles.modalFieldLabel}>
+								제목
+								<input type="text" className={styles.modalFieldControl} value={manualForm.title} onChange={(event) => setManualForm((prevState) => ({ ...prevState, title: event.target.value }))} />
+							</label>
+							<label className={styles.modalFieldLabel}>
+								담당자
+								<input type="text" className={styles.modalFieldControl} value={manualForm.coManager} onChange={(event) => setManualForm((prevState) => ({ ...prevState, coManager: event.target.value }))} />
+							</label>
+							<label className={styles.modalFieldLabel}>
+								우선순위
+								<select className={styles.modalFieldControl} value={manualForm.workPriorCd} onChange={(event) => setManualForm((prevState) => ({ ...prevState, workPriorCd: event.target.value }))}>
+									<option value="">우선순위 선택</option>
+									{workPriorList.map((codeItem) => (
+										<option key={codeItem.cd} value={codeItem.cd}>
+											{codeItem.cdNm}
+										</option>
+									))}
+								</select>
+							</label>
+							<label className={styles.modalFieldLabel}>
+								본문
+								<textarea className={styles.modalTextarea} value={manualForm.content} onChange={(event) => setManualForm((prevState) => ({ ...prevState, content: event.target.value }))} />
+							</label>
+							<div className={styles.fileTileGrid}>
+								{manualFiles.map((fileItem, fileIndex) => renderSelectedFileTile(fileItem, `manual-${fileIndex}`, () => handleRemoveManualFile(fileIndex)))}
+								<label className={`${styles.fileTile} ${styles.fileTileAdd}`}>
+									<span className={styles.fileAddIcon}>+</span>
+									<span className={styles.fileNameLabel}>파일 추가</span>
+									<input type="file" multiple className={styles.hiddenFileInput} onChange={handleChangeManualFiles} />
+								</label>
+							</div>
+							<div className={styles.modalActionRow}>
+								<button type="submit" className={styles.primaryButton} disabled={isManualSaving}>
+									{isManualSaving ? "등록 중..." : "등록"}
+								</button>
+								<button type="button" className={styles.secondaryButton} onClick={() => setIsManualModalOpen(false)} disabled={isManualSaving}>
+									취소
+								</button>
+							</div>
+						</form>
+					</WorkModalShell>
+				) : null}
+
+				{isImportModalOpen ? (
+					<WorkModalShell title="SR 가져오기" onClose={() => !isImportSaving && setIsImportModalOpen(false)}>
+						<form className={styles.modalForm} onSubmit={(event) => void handleSubmitImport(event)}>
+							<label className={styles.modalFieldLabel}>
+								업무 키
+								<input type="text" className={styles.modalFieldControl} value={importWorkKey} onChange={(event) => setImportWorkKey(event.target.value)} placeholder="예: SR-0001" />
+							</label>
+							<div className={styles.modalActionRow}>
+								<button type="submit" className={styles.primaryButton} disabled={isImportSaving}>
+									{isImportSaving ? "가져오는 중..." : "가져오기"}
+								</button>
+								<button type="button" className={styles.secondaryButton} onClick={() => setIsImportModalOpen(false)} disabled={isImportSaving}>
+									취소
+								</button>
+							</div>
+						</form>
+					</WorkModalShell>
+				) : null}
+
+				{previewImageUrl !== "" ? (
+					<div className={styles.previewOverlay} onClick={() => setPreviewImageUrl("")}>
+						<div className={styles.previewDialog} onClick={(event) => event.stopPropagation()}>
+							<button type="button" className={styles.modalCloseButton} onClick={() => setPreviewImageUrl("")}>
+								닫기
+							</button>
+							{/* eslint-disable-next-line @next/next/no-img-element */}
+							<img src={previewImageUrl} alt="첨부 미리보기" className={styles.previewImage} />
+						</div>
+					</div>
+				) : null}
+			</div>
+		</>
+	);
+}

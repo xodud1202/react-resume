@@ -1,0 +1,32 @@
+.dateInputWrapper {
+	position: relative;
+	display: flex;
+	align-items: center;
+	width: 100%;
+}
+
+.dateInputIcon {
+	position: absolute;
+	left: 0.75rem;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.1rem;
+	height: 1.1rem;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: rgba(226, 232, 240, 0.72);
+	cursor: pointer;
+}
+
+.dateInputIcon:disabled {
+	cursor: default;
+	opacity: 0.45;
+}
+
+.dateInputControl {
+	width: 100%;
+	padding-left: 2.25rem;
+}
+

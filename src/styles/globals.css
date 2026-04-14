@@ -486,3 +486,129 @@ a:hover {
 		content: none !important;
 	}
 }
+
+/* Quill 에디터 내부 이미지는 기존 전역 이미지 스타일 영향을 받지 않도록 예외 처리합니다. */
+.ql-editor img {
+	width: auto !important;
+	max-width: 100% !important;
+	height: auto !important;
+	border-radius: 0 !important;
+}
+
+.quill-content {
+	white-space: normal;
+	word-break: break-word;
+}
+
+.quill-content p,
+.quill-content h1,
+.quill-content h2,
+.quill-content h3,
+.quill-content h4,
+.quill-content h5,
+.quill-content h6 {
+	margin: 0 0 0.45rem;
+}
+
+.quill-content > :last-child {
+	margin-bottom: 0;
+}
+
+.quill-content ul,
+.quill-content ol {
+	margin: 0.35rem 0 0.45rem;
+	padding-left: 1.5rem;
+}
+
+.quill-content ul {
+	list-style-type: disc;
+}
+
+.quill-content ul ul {
+	list-style-type: circle;
+}
+
+.quill-content ul ul ul {
+	list-style-type: square;
+}
+
+.quill-content ol {
+	list-style-type: decimal;
+}
+
+.quill-content ol ol {
+	list-style-type: lower-alpha;
+}
+
+.quill-content ol ol ol {
+	list-style-type: lower-roman;
+}
+
+.quill-content li {
+	margin: 0.2rem 0;
+}
+
+.quill-content li::marker {
+	color: inherit;
+}
+
+.quill-content blockquote {
+	margin: 0.45rem 0;
+	padding-left: 1rem;
+	border-left: 4px solid rgba(148, 163, 184, 0.45);
+	color: inherit;
+	opacity: 0.92;
+}
+
+.quill-content a {
+	color: inherit;
+	text-decoration: underline;
+}
+
+.quill-content img {
+	width: auto;
+	max-width: 100%;
+	height: auto;
+	border-radius: 0;
+}
+
+.quill-content .ql-align-center {
+	text-align: center;
+}
+
+.quill-content .ql-align-right {
+	text-align: right;
+}
+
+.quill-content .ql-align-justify {
+	text-align: justify;
+}
+
+/* Quill 읽기 영역 코드 블록 스타일을 가독성 있게 맞춥니다. */
+.quill-content pre.ql-syntax,
+.quill-content code.ql-syntax,
+.quill-content pre.ql-syntax div,
+.quill-content pre[data-language],
+.quill-content .ql-code-block-container {
+	font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+	background-color: #101418;
+	color: #f5f7fa;
+	border-radius: 8px;
+	margin: 6px 0;
+	padding: 10px 14px;
+	line-height: 1.6;
+	overflow-x: auto;
+	display: block;
+}
+
+.quill-content pre.ql-syntax,
+.quill-content code.ql-syntax,
+.quill-content pre[data-language],
+.quill-content .ql-code-block {
+	white-space: pre;
+}
+
+.quill-content .ql-code-block {
+	font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+	color: inherit;
+}

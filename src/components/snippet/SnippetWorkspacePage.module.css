@@ -244,10 +244,10 @@
 
 .logoutButton {
 	width: 100%;
-	min-height: 4.6rem;
+	min-height: 3.5rem;
 	border: 1px solid var(--panel-border);
-	background: var(--panel-bg-strong);
-	color: var(--ink);
+	background: black;
+	color: white;
 	font-size: 1.02rem;
 }
 
