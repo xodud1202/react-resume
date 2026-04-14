@@ -14,6 +14,11 @@ const LANDING_MENU_BUTTON_LIST: LandingMenuButton[] = [
 		description: "이력서 화면으로 이동합니다.",
 	},
 	{
+		label: "뉴스",
+		href: "/news",
+		description: "뉴스 RSS 조회 리스트로 이동합니다.",
+	},
+	{
 		label: "스니펫",
 		href: "/snippet",
 		description: "개인 스니펫 저장소로 이동합니다.",
