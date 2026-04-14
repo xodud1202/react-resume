@@ -1508,19 +1508,21 @@ export default function WorkWorkspacePage() {
 													formats={replyQuill.quillFormats}
 												/>
 											</div>
-											<div className={styles.fileTileGrid}>
-												{replyFiles.map((fileItem, fileIndex) => renderSelectedFileTile(fileItem, `reply-${fileIndex}`, () => handleRemoveReplyFile(fileIndex)))}
-												<button type="button" className={`${styles.fileTile} ${styles.fileTileAdd}`} onClick={() => replyFileInputRef.current?.click()}>
-													<span className={styles.fileAddIcon}>+</span>
-													<span className={styles.fileNameLabel}>댓글 파일</span>
-												</button>
+											<div className={styles.replyComposerFooter}>
+												<div className={`${styles.fileTileGrid} ${styles.replyComposerFiles}`}>
+													{replyFiles.map((fileItem, fileIndex) => renderSelectedFileTile(fileItem, `reply-${fileIndex}`, () => handleRemoveReplyFile(fileIndex)))}
+													<button type="button" className={`${styles.fileTile} ${styles.fileTileAdd}`} onClick={() => replyFileInputRef.current?.click()}>
+														<span className={styles.fileAddIcon}>+</span>
+														<span className={styles.fileNameLabel}>댓글 파일</span>
+													</button>
+												</div>
+												<div className={styles.replyComposerActions}>
+													<button type="button" className={`${styles.primaryButton} ${styles.replyComposerSubmitButton}`} onClick={() => void handleSaveReply()} disabled={isReplySaving}>
+														{isReplySaving ? "저장 중..." : "댓글 등록"}
+													</button>
+												</div>
 											</div>
 											<input ref={replyFileInputRef} type="file" multiple className={styles.hiddenFileInput} onChange={handleChangeReplyFiles} />
-											<div className={styles.replyActionRow}>
-												<button type="button" className={styles.primaryButton} onClick={() => void handleSaveReply()} disabled={isReplySaving}>
-													{isReplySaving ? "저장 중..." : "댓글 등록"}
-												</button>
-											</div>
 										</div>
 									</section>
 

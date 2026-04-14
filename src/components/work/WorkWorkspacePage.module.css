@@ -177,6 +177,12 @@
 	border-radius: 12px 0 0 12px;
 }
 
+.inlineActionButton,
+.inlineDangerButton {
+	padding: 5px 10px;
+}
+
+
 .searchButton,
 .primaryButton,
 .secondaryButton,
@@ -381,6 +387,7 @@
 	border-radius: 12px;
 	background: rgba(255, 255, 255, 0.02);
 	text-align: left;
+	cursor: pointer;
 }
 
 .workCardActive {
@@ -610,6 +617,28 @@
 	background: rgba(7, 11, 16, 0.82);
 }
 
+.replyComposerFooter {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.9rem;
+}
+
+.replyComposerFiles {
+	flex: 1;
+	min-width: 0;
+}
+
+.replyComposerActions {
+	display: flex;
+	align-items: stretch;
+	justify-content: flex-end;
+}
+
+.replyComposerSubmitButton {
+	min-width: 110px;
+	white-space: nowrap;
+}
+
 .quillShell {
 	border: 1px solid var(--work-border);
 	border-radius: 14px;
@@ -736,6 +765,18 @@
 
 	.fileTileGrid {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	.replyComposerFooter {
+		flex-direction: column;
+	}
+
+	.replyComposerActions {
+		width: 100%;
+	}
+
+	.replyComposerSubmitButton {
+		width: 100%;
 	}
 
 	.metaInlineField {
