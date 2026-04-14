@@ -1,6 +1,6 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import {
 	fetchSnippetBootstrap,
@@ -59,6 +59,16 @@ const SORT_OPTION_LIST: Array<{ value: SnippetSortBy; label: string }> = [
 	{ value: "copy_count_desc", label: "복사 수순" },
 	{ value: "title_asc", label: "제목순" },
 ];
+
+const SNIPPET_PORTAL_THEME_STYLE = {
+	"--panel-bg-strong": "#111822",
+	"--panel-border": "rgba(148, 163, 184, 0.16)",
+	"--panel-border-strong": "rgba(148, 163, 184, 0.28)",
+	"--ink": "#f3f7fb",
+	"--muted": "rgba(226, 232, 240, 0.72)",
+	"--accent-strong": "#fb923c",
+	"--danger": "#fda4af",
+} as CSSProperties;
 
 // 비어 있는 문자열을 목록용 기본 문구로 치환합니다.
 function resolveCompactText(value: string | null, fallbackText: string): string {
@@ -850,7 +860,7 @@ export default function SnippetWorkspacePage() {
 					<div
 						ref={folderMenuRef}
 						className={styles.inlineSelectMenu}
-						style={{ top: folderMenuPosition.top, left: folderMenuPosition.left, width: folderMenuPosition.width }}
+						style={{ ...SNIPPET_PORTAL_THEME_STYLE, top: folderMenuPosition.top, left: folderMenuPosition.left, width: folderMenuPosition.width }}
 						role="listbox"
 						aria-label="폴더 선택"
 					>
@@ -890,7 +900,7 @@ export default function SnippetWorkspacePage() {
 					<div
 						ref={languageMenuRef}
 						className={styles.inlineSelectMenu}
-						style={{ top: languageMenuPosition.top, left: languageMenuPosition.left, width: languageMenuPosition.width }}
+						style={{ ...SNIPPET_PORTAL_THEME_STYLE, top: languageMenuPosition.top, left: languageMenuPosition.left, width: languageMenuPosition.width }}
 						role="listbox"
 						aria-label="언어 선택"
 					>
@@ -935,7 +945,7 @@ export default function SnippetWorkspacePage() {
 					<div
 						ref={tagSuggestionPanelRef}
 						className={styles.tagSuggestionPanel}
-						style={{ top: tagSuggestionPosition.top, left: tagSuggestionPosition.left, width: tagSuggestionPosition.width }}
+						style={{ ...SNIPPET_PORTAL_THEME_STYLE, top: tagSuggestionPosition.top, left: tagSuggestionPosition.left, width: tagSuggestionPosition.width }}
 					>
 						{filteredTagSuggestionList.length > 0 ? (
 							filteredTagSuggestionList.map((tag) => (
