@@ -96,7 +96,7 @@ export default function SnippetGoogleLoginButton({ clientId, onCredential }: Sni
 		buttonContainerRef.current.innerHTML = "";
 		window.google.accounts.id.renderButton(buttonContainerRef.current, {
 			type: "standard",
-			theme: "outline",
+			theme: "filled_black",
 			size: "large",
 			text: "signin_with",
 			shape: "rectangular",

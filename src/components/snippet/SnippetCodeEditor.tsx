@@ -1,5 +1,5 @@
 import CodeMirror from "@uiw/react-codemirror";
-import { githubLight } from "@uiw/codemirror-theme-github";
+import { githubDark } from "@uiw/codemirror-theme-github";
 import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
 import { java } from "@codemirror/lang-java";
@@ -46,7 +46,7 @@ export default function SnippetCodeEditor({ value, languageCd, onChange }: Snipp
 			className={styles.editorWrapper}
 			value={value}
 			height="520px"
-			theme={githubLight}
+			theme={githubDark}
 			extensions={resolveLanguageExtensions(languageCd)}
 			onChange={(nextValue) => {
 				// 에디터 값 변경을 상위 폼 상태로 전달합니다.

@@ -1,15 +1,22 @@
 .pageShell {
-	--snippet-ink: #192231;
-	--snippet-muted: rgba(25, 34, 49, 0.68);
-	--snippet-border: rgba(25, 34, 49, 0.1);
-	--snippet-panel: rgba(255, 253, 249, 0.92);
-	--snippet-accent: #cc5d37;
+	--snippet-bg: #06080c;
+	--snippet-bg-soft: #0d121a;
+	--snippet-panel: rgba(17, 24, 34, 0.92);
+	--snippet-panel-strong: #111822;
+	--snippet-panel-muted: rgba(21, 29, 41, 0.92);
+	--snippet-ink: #f3f7fb;
+	--snippet-muted: rgba(226, 232, 240, 0.72);
+	--snippet-border: rgba(148, 163, 184, 0.16);
+	--snippet-border-strong: rgba(148, 163, 184, 0.28);
+	--snippet-accent: #f97316;
+	--snippet-accent-soft: rgba(249, 115, 22, 0.14);
+	--snippet-danger: #fda4af;
 	min-height: 100vh;
 	padding: 1.5rem;
 	background:
-		radial-gradient(circle at top right, rgba(234, 173, 109, 0.36), transparent 26%),
-		radial-gradient(circle at left bottom, rgba(49, 104, 141, 0.14), transparent 28%),
-		linear-gradient(145deg, #f4f0e6 0%, #f9f5ef 38%, #eef4f6 100%);
+		radial-gradient(circle at top right, rgba(249, 115, 22, 0.16), transparent 24%),
+		radial-gradient(circle at left bottom, rgba(56, 189, 248, 0.1), transparent 26%),
+		linear-gradient(180deg, #05070b 0%, #0a0d12 46%, #07090d 100%);
 	color: var(--snippet-ink);
 }
 
@@ -87,20 +94,20 @@
 }
 
 .primaryButton {
-	border: none;
-	background: var(--snippet-ink);
-	color: #fff;
+	border: 1px solid rgba(251, 146, 60, 0.42);
+	background: linear-gradient(180deg, #fb923c 0%, #ea580c 100%);
+	color: #fff7ed;
 }
 
 .secondaryLink {
 	border: 1px solid var(--snippet-border);
-	background: rgba(255, 255, 255, 0.76);
+	background: rgba(17, 24, 34, 0.88);
 	color: var(--snippet-ink);
 }
 
 .secondaryButton {
 	border: 1px solid var(--snippet-border);
-	background: rgba(255, 255, 255, 0.76);
+	background: rgba(17, 24, 34, 0.88);
 	color: var(--snippet-ink);
 }
 
@@ -108,15 +115,15 @@
 	width: 2.45rem;
 	height: 2.45rem;
 	padding: 0;
-	border: 1px solid rgba(25, 34, 49, 0.16);
-	background: rgba(255, 255, 255, 0.9);
+	border: 1px solid var(--snippet-border-strong);
+	background: rgba(17, 24, 34, 0.92);
 	color: var(--snippet-ink);
 	font-size: 1.22rem;
 	line-height: 1;
 }
 
 .closeIconButton:hover:not(:disabled) {
-	background: rgba(25, 34, 49, 0.06);
+	background: var(--snippet-panel-muted);
 }
 
 .messageBar,
@@ -126,7 +133,7 @@
 	margin: 0 auto 1rem;
 	padding: 0.9rem 1rem;
 	border-radius: 1rem;
-	background: rgba(255, 255, 255, 0.76);
+	background: rgba(17, 24, 34, 0.88);
 	border: 1px solid var(--snippet-border);
 }
 
@@ -156,16 +163,16 @@
 	min-width: 10.5rem;
 	min-height: 3rem;
 	padding: 0 1.3rem;
-	background: linear-gradient(180deg, #111827 0%, #000000 100%);
-	box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
+	background: linear-gradient(180deg, #fb923c 0%, #ea580c 100%);
+	box-shadow: 0 8px 20px rgba(234, 88, 12, 0.2);
 }
 
 .formPanel,
 .sideCard {
-	border: 1px solid rgba(25, 34, 49, 0.12);
+	border: 1px solid var(--snippet-border);
 	border-radius: 3px;
 	background: var(--snippet-panel);
-	box-shadow: 0 16px 36px rgba(25, 34, 49, 0.08);
+	box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
 }
 
 .formPanel {
@@ -199,8 +206,8 @@
 	align-items: center;
 	flex: 0 0 auto;
 	padding: 0.95rem 1.2rem 1.1rem;
-	border-top: 1px solid rgba(25, 34, 49, 0.1);
-	background: rgba(255, 255, 255, 0.94);
+	border-top: 1px solid var(--snippet-border);
+	background: var(--snippet-panel-muted);
 }
 
 .formGrid {
@@ -230,11 +237,11 @@
 .textArea,
 .memoArea {
 	width: 100%;
-	border: 1px solid rgba(25, 34, 49, 0.18);
+	border: 1px solid var(--snippet-border-strong);
 	border-radius: 3px;
-	background: #ffffff;
+	background: var(--snippet-panel-strong);
 	color: var(--snippet-ink);
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+	box-shadow: none;
 }
 
 .textInput,
@@ -255,10 +262,10 @@
 .selectBox:focus,
 .textArea:focus,
 .memoArea:focus {
-	border-color: rgba(25, 34, 49, 0.32);
-	outline: 2px solid rgba(25, 34, 49, 0.08);
+	border-color: rgba(251, 146, 60, 0.42);
+	outline: 2px solid rgba(249, 115, 22, 0.12);
 	outline-offset: 0;
-	box-shadow: 0 0 0 3px rgba(25, 34, 49, 0.04);
+	box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.08);
 }
 
 .checkboxField {
@@ -299,9 +306,9 @@
 	align-items: center;
 	gap: 0.45rem;
 	padding: 0.45rem 0.65rem;
-	border: 1px solid rgba(25, 34, 49, 0.12);
+	border: 1px solid var(--snippet-border);
 	border-radius: 3px;
-	background: rgba(255, 255, 255, 0.72);
+	background: rgba(21, 29, 41, 0.9);
 }
 
 .selectedTagChipLabel {
@@ -324,7 +331,7 @@
 }
 
 .selectedTagChipRemove:hover {
-	background: rgba(25, 34, 49, 0.08);
+	background: rgba(255, 255, 255, 0.08);
 	color: var(--snippet-ink);
 }
 
@@ -339,9 +346,9 @@
 
 .tagSuggestionPanel {
 	display: grid;
-	border: 1px solid rgba(25, 34, 49, 0.12);
+	border: 1px solid var(--snippet-border);
 	border-radius: 3px;
-	background: #ffffff;
+	background: var(--snippet-panel-strong);
 	overflow: hidden;
 }
 
@@ -353,8 +360,8 @@
 	width: 100%;
 	padding: 0.75rem 0.9rem;
 	border: none;
-	border-bottom: 1px solid rgba(25, 34, 49, 0.08);
-	background: #ffffff;
+	border-bottom: 1px solid var(--snippet-border);
+	background: var(--snippet-panel-strong);
 	color: var(--snippet-ink);
 	text-align: left;
 	cursor: pointer;
@@ -365,11 +372,11 @@
 }
 
 .tagSuggestionButton:hover:not(:disabled) {
-	background: rgba(25, 34, 49, 0.04);
+	background: rgba(249, 115, 22, 0.08);
 }
 
 .tagSuggestionCreateButton {
-	background: rgba(204, 93, 55, 0.08);
+	background: rgba(249, 115, 22, 0.12);
 }
 
 .tagSuggestionName {
@@ -387,7 +394,7 @@
 	margin: 0;
 	padding: 0.8rem 0.9rem;
 	color: var(--snippet-muted);
-	background: rgba(25, 34, 49, 0.02);
+	background: rgba(17, 24, 34, 0.88);
 }
 
 .helperText,

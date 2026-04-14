@@ -1,16 +1,22 @@
 .pageShell {
-	--snippet-ink: #172230;
-	--snippet-muted: rgba(23, 34, 48, 0.7);
-	--snippet-card: rgba(255, 252, 246, 0.92);
-	--snippet-accent: #c7512f;
-	--snippet-accent-soft: rgba(199, 81, 47, 0.12);
+	--snippet-bg: #06080c;
+	--snippet-bg-soft: #0d121a;
+	--snippet-panel: rgba(17, 24, 34, 0.92);
+	--snippet-panel-strong: #111822;
+	--snippet-border: rgba(148, 163, 184, 0.16);
+	--snippet-border-strong: rgba(148, 163, 184, 0.28);
+	--snippet-ink: #f3f7fb;
+	--snippet-muted: rgba(226, 232, 240, 0.72);
+	--snippet-accent: #f97316;
+	--snippet-accent-soft: rgba(249, 115, 22, 0.14);
+	--snippet-danger: #fda4af;
 	position: relative;
 	min-height: 100vh;
 	padding: 2rem;
 	background:
-		radial-gradient(circle at top left, rgba(249, 205, 145, 0.45), transparent 38%),
-		radial-gradient(circle at bottom right, rgba(77, 117, 196, 0.18), transparent 32%),
-		linear-gradient(135deg, #f5efe3 0%, #f6f0ed 48%, #eff4f8 100%);
+		radial-gradient(circle at top left, rgba(249, 115, 22, 0.16), transparent 34%),
+		radial-gradient(circle at bottom right, rgba(56, 189, 248, 0.1), transparent 30%),
+		linear-gradient(180deg, #05070b 0%, #0a0d12 46%, #07090d 100%);
 	color: var(--snippet-ink);
 	overflow: hidden;
 }
@@ -21,7 +27,7 @@
 	width: 30rem;
 	height: 30rem;
 	border-radius: 999px;
-	background: radial-gradient(circle, rgba(199, 81, 47, 0.14), transparent 68%);
+	background: radial-gradient(circle, rgba(249, 115, 22, 0.16), transparent 68%);
 	filter: blur(12px);
 	pointer-events: none;
 }
@@ -80,7 +86,7 @@
 	width: fit-content;
 	margin-top: 0.5rem;
 	padding-bottom: 0.2rem;
-	border-bottom: 1px solid rgba(23, 34, 48, 0.2);
+	border-bottom: 1px solid var(--snippet-border-strong);
 	color: var(--snippet-ink);
 	font-weight: 600;
 	text-decoration: none;
@@ -94,10 +100,10 @@
 .card {
 	width: min(100%, 29rem);
 	padding: 2rem;
-	border: 1px solid rgba(23, 34, 48, 0.08);
+	border: 1px solid var(--snippet-border);
 	border-radius: 1.75rem;
-	background: var(--snippet-card);
-	box-shadow: 0 22px 60px rgba(32, 39, 56, 0.12);
+	background: var(--snippet-panel);
+	box-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
 	backdrop-filter: blur(16px);
 }
 
@@ -138,7 +144,7 @@
 .errorText {
 	margin: 1rem 0 0;
 	font-size: 0.95rem;
-	color: #b42318;
+	color: var(--snippet-danger);
 }
 
 @media (max-width: 900px) {

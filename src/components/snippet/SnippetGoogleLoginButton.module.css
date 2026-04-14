@@ -19,9 +19,9 @@
 	margin: 0;
 	min-height: 1.25rem;
 	font-size: 0.9rem;
-	color: rgba(27, 43, 63, 0.72);
+	color: rgba(226, 232, 240, 0.72);
 }
 
 .errorText {
-	color: #b42318;
+	color: #fda4af;
 }
