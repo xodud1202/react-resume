@@ -1119,7 +1119,7 @@ export default function WorkWorkspacePage() {
 				workStatCdList: selectedStatusCodeList,
 				preferredWorkSeq: result.data.workSeq,
 			});
-			showFeedbackToast("SR 업무를 가져왔습니다.");
+			showFeedbackToast(result.data.message || "SR 업무를 가져왔습니다.");
 		} finally {
 			setIsImportSaving(false);
 		}
@@ -1427,7 +1427,7 @@ export default function WorkWorkspacePage() {
 												</div>
 											</div>
 											<div className={styles.metaInlineField}>
-												<span className={styles.metaLabel}>업무 시작일시</span>
+												<span className={styles.metaLabel}>업무 시작</span>
 												<div className={styles.metaControl}>
 													<AdminDateInput
 														className={styles.metaDateInput}
@@ -1438,7 +1438,7 @@ export default function WorkWorkspacePage() {
 												</div>
 											</div>
 											<div className={styles.metaInlineField}>
-												<span className={styles.metaLabel}>업무 종료일시</span>
+												<span className={styles.metaLabel}>업무 종료</span>
 												<div className={styles.metaControl}>
 													<AdminDateInput
 														className={styles.metaDateInput}
