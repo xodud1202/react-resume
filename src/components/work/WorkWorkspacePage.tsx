@@ -7,10 +7,12 @@ import WorkReadonlyHtml from "@/components/work/WorkReadonlyHtml";
 import type {
 	WorkBootstrapResponse,
 	WorkCommonCode,
+	WorkCompanyOption,
 	WorkDetail,
 	WorkDetailResponse,
 	WorkDetailUpdateRequest,
 	WorkFile,
+	WorkImportFormState,
 	WorkImportRequest,
 	WorkListFilter,
 	WorkListResponse,
@@ -159,6 +161,34 @@ function createEmptyManualCreateForm(): ManualCreateFormState {
 		workPriorCd: "",
 		content: "",
 	};
+}
+
+// SR 가져오기 폼의 빈 초기값을 생성합니다.
+function createEmptyImportForm(): WorkImportFormState {
+	return {
+		workCompanySeq: "",
+		workCompanyProjectSeq: "",
+		workKey: "",
+	};
+}
+
+// SR 가져오기 기본 회사 번호를 계산합니다.
+function resolveDefaultImportCompanySeq(companyList: WorkCompanyOption[], selectedCompanySeq: number | null): string {
+	if (selectedCompanySeq && companyList.some((companyItem) => companyItem.workCompanySeq === selectedCompanySeq)) {
+		return String(selectedCompanySeq);
+	}
+	return companyList[0] ? String(companyList[0].workCompanySeq) : "";
+}
+
+// SR 가져오기 프로젝트 선택 안내 문구를 계산합니다.
+function resolveImportProjectPlaceholderText(formState: WorkImportFormState, projectLoading: boolean): string {
+	if (!formState.workCompanySeq) {
+		return "회사를 먼저 선택하세요";
+	}
+	if (projectLoading) {
+		return "프로젝트를 불러오는 중입니다.";
+	}
+	return "프로젝트를 선택하세요";
 }
 
 // 서버 날짜 문자열을 date 입력값으로 변환합니다.
@@ -382,7 +412,6 @@ export default function WorkWorkspacePage() {
 	const [manualFiles, setManualFiles] = useState<File[]>([]);
 	const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 	const [isImportSaving, setIsImportSaving] = useState(false);
-	const [importWorkKey, setImportWorkKey] = useState("");
 	const [replyComment, setReplyComment] = useState("");
 	const [replyFiles, setReplyFiles] = useState<File[]>([]);
 	const [editingReplySeq, setEditingReplySeq] = useState<number | null>(null);
@@ -408,6 +437,7 @@ export default function WorkWorkspacePage() {
 	});
 	const workStatList = bootstrap?.workStatList ?? [];
 	const workPriorList = bootstrap?.workPriorList ?? [];
+	const companyList = useMemo(() => bootstrap?.companyList ?? [], [bootstrap]);
 	const currentUser = bootstrap?.currentUser ?? null;
 	const selectedDetail = detailResponse?.detail ?? null;
 	const statusFilterButtonLabel = resolveStatusFilterButtonLabel(selectedStatusCodeList, workStatList);
@@ -415,6 +445,10 @@ export default function WorkWorkspacePage() {
 		() => (listResponse?.statusSectionList ?? []).filter((sectionItem) => sectionItem.totalCount > 0),
 		[listResponse],
 	);
+	const [importForm, setImportForm] = useState<WorkImportFormState>(createEmptyImportForm);
+	const [importProjectList, setImportProjectList] = useState<WorkProjectOption[]>([]);
+	const [isImportProjectLoading, setIsImportProjectLoading] = useState(false);
+	const importProjectPlaceholderText = resolveImportProjectPlaceholderText(importForm, isImportProjectLoading);
 
 	// 중앙 토스트 타이머를 정리합니다.
 	const clearFeedbackToastTimer = () => {
@@ -647,6 +681,47 @@ export default function WorkWorkspacePage() {
 		};
 	}, [previewImageUrl]);
 
+	// SR 가져오기 모달의 프로젝트 목록을 회사 기준으로 다시 조회합니다.
+	const loadImportProjectList = async (workCompanySeqValue: string, preferredProjectSeq = "") => {
+		if (!workCompanySeqValue) {
+			setImportProjectList([]);
+			setImportForm((prevState) => ({
+				...prevState,
+				workCompanyProjectSeq: "",
+			}));
+			return;
+		}
+
+		setIsImportProjectLoading(true);
+		try {
+			// 선택 회사의 프로젝트 목록을 조회해 모달 기본 프로젝트를 맞춥니다.
+			const result = await fetchWorkProjectList(Number(workCompanySeqValue));
+			if (!result.ok || !result.data) {
+				setImportProjectList([]);
+				setImportForm((prevState) => ({
+					...prevState,
+					workCompanyProjectSeq: "",
+				}));
+				setMessage(result.message || "프로젝트 목록을 불러오지 못했습니다.");
+				return;
+			}
+
+			const nextProjectList = result.data;
+			const hasPreferredProject = nextProjectList.some(
+				(projectItem) => String(projectItem.workCompanyProjectSeq) === preferredProjectSeq,
+			);
+			setImportProjectList(nextProjectList);
+			setImportForm((prevState) => ({
+				...prevState,
+				workCompanyProjectSeq: hasPreferredProject
+					? preferredProjectSeq
+					: (nextProjectList[0] ? String(nextProjectList[0].workCompanyProjectSeq) : ""),
+			}));
+		} finally {
+			setIsImportProjectLoading(false);
+		}
+	};
+
 	// 회사 선택이 바뀌면 프로젝트 목록을 다시 조회합니다.
 	const handleChangeCompany = async (event: ChangeEvent<HTMLSelectElement>) => {
 		const nextCompanySeq = Number(event.target.value) || null;
@@ -700,6 +775,26 @@ export default function WorkWorkspacePage() {
 			workStatCdList: selectedStatusCodeList,
 		});
 	};
+
+	// SR 가져오기 모달을 열거나 닫을 때 기본 선택값을 동기화합니다.
+	useEffect(() => {
+		if (!isImportModalOpen) {
+			setImportForm(createEmptyImportForm());
+			setImportProjectList([]);
+			setIsImportProjectLoading(false);
+			return;
+		}
+
+		// 메인 선택값을 우선 사용하고, 없으면 첫 회사/프로젝트를 기본값으로 사용합니다.
+		const nextWorkCompanySeq = resolveDefaultImportCompanySeq(companyList, selectedCompanySeq);
+		const nextWorkCompanyProjectSeq = selectedProjectSeq ? String(selectedProjectSeq) : "";
+		setImportForm({
+			workCompanySeq: nextWorkCompanySeq,
+			workCompanyProjectSeq: nextWorkCompanyProjectSeq,
+			workKey: "",
+		});
+		void loadImportProjectList(nextWorkCompanySeq, nextWorkCompanyProjectSeq);
+	}, [companyList, isImportModalOpen, selectedCompanySeq, selectedProjectSeq]);
 
 	// 검색 폼 제출 시 현재 검색어를 반영합니다.
 	const handleSubmitSearch = async (event: FormEvent<HTMLFormElement>) => {
@@ -1085,11 +1180,15 @@ export default function WorkWorkspacePage() {
 	// SR 가져오기를 실행합니다.
 	const handleSubmitImport = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (!selectedCompanySeq || !selectedProjectSeq) {
-			setMessage("회사와 프로젝트를 선택해주세요.");
+		if (trimText(importForm.workCompanySeq) === "") {
+			setMessage("회사를 선택해주세요.");
 			return;
 		}
-		if (trimText(importWorkKey) === "") {
+		if (trimText(importForm.workCompanyProjectSeq) === "") {
+			setMessage("프로젝트를 선택해주세요.");
+			return;
+		}
+		if (trimText(importForm.workKey) === "") {
 			setMessage("업무 키를 입력해주세요.");
 			return;
 		}
@@ -1097,11 +1196,11 @@ export default function WorkWorkspacePage() {
 		setIsImportSaving(true);
 		setMessage("");
 		try {
-			// 업무 키 기준으로 SR 업무를 가져와 현재 회사/프로젝트에 저장합니다.
+			// 모달에서 선택한 회사/프로젝트 기준으로 SR 업무를 가져옵니다.
 			const command: WorkImportRequest = {
-				workCompanySeq: selectedCompanySeq,
-				workCompanyProjectSeq: selectedProjectSeq,
-				workKey: trimText(importWorkKey),
+				workCompanySeq: Number(importForm.workCompanySeq),
+				workCompanyProjectSeq: Number(importForm.workCompanyProjectSeq),
+				workKey: trimText(importForm.workKey),
 			};
 			const result = await importWork(command);
 			if (!result.ok || !result.data) {
@@ -1110,7 +1209,8 @@ export default function WorkWorkspacePage() {
 			}
 
 			setIsImportModalOpen(false);
-			setImportWorkKey("");
+			setImportForm(createEmptyImportForm());
+			setImportProjectList([]);
 			await loadWorkList({
 				workCompanySeq: selectedCompanySeq,
 				workCompanyProjectSeq: selectedProjectSeq,
@@ -1123,6 +1223,36 @@ export default function WorkWorkspacePage() {
 		} finally {
 			setIsImportSaving(false);
 		}
+	};
+
+	// SR 가져오기 모달의 회사 선택을 반영합니다.
+	const handleChangeImportCompany = async (event: ChangeEvent<HTMLSelectElement>) => {
+		const nextWorkCompanySeq = event.target.value;
+		setImportForm((prevState) => ({
+			...prevState,
+			workCompanySeq: nextWorkCompanySeq,
+			workCompanyProjectSeq: "",
+		}));
+		setImportProjectList([]);
+		await loadImportProjectList(nextWorkCompanySeq);
+	};
+
+	// SR 가져오기 모달의 프로젝트 선택을 반영합니다.
+	const handleChangeImportProject = (event: ChangeEvent<HTMLSelectElement>) => {
+		const nextWorkCompanyProjectSeq = event.target.value;
+		setImportForm((prevState) => ({
+			...prevState,
+			workCompanyProjectSeq: nextWorkCompanyProjectSeq,
+		}));
+	};
+
+	// SR 가져오기 모달의 업무 키 입력값을 반영합니다.
+	const handleChangeImportWorkKey = (event: ChangeEvent<HTMLInputElement>) => {
+		const nextWorkKey = event.target.value;
+		setImportForm((prevState) => ({
+			...prevState,
+			workKey: nextWorkKey,
+		}));
 	};
 
 	// 업무 첨부를 새 창 다운로드로 엽니다.
@@ -1660,11 +1790,49 @@ export default function WorkWorkspacePage() {
 					<WorkModalShell title="SR 가져오기" onClose={() => !isImportSaving && setIsImportModalOpen(false)}>
 						<form className={styles.modalForm} onSubmit={(event) => void handleSubmitImport(event)}>
 							<label className={styles.modalFieldLabel}>
+								회사
+								<select
+									className={styles.modalFieldControl}
+									value={importForm.workCompanySeq}
+									onChange={(event) => void handleChangeImportCompany(event)}
+									disabled={isImportSaving}
+								>
+									<option value="" disabled>회사를 선택하세요</option>
+									{companyList.map((companyItem) => (
+										<option key={companyItem.workCompanySeq} value={companyItem.workCompanySeq}>
+											{companyItem.workCompanyNm}
+										</option>
+									))}
+								</select>
+							</label>
+							<label className={styles.modalFieldLabel}>
+								프로젝트
+								<select
+									className={styles.modalFieldControl}
+									value={importForm.workCompanyProjectSeq}
+									onChange={handleChangeImportProject}
+									disabled={!importForm.workCompanySeq || isImportProjectLoading || isImportSaving}
+								>
+									<option value="" disabled>{importProjectPlaceholderText}</option>
+									{importProjectList.map((projectItem) => (
+										<option key={projectItem.workCompanyProjectSeq} value={projectItem.workCompanyProjectSeq}>
+											{projectItem.workCompanyProjectNm}
+										</option>
+									))}
+								</select>
+							</label>
+							<label className={styles.modalFieldLabel}>
 								업무 키
-								<input type="text" className={styles.modalFieldControl} value={importWorkKey} onChange={(event) => setImportWorkKey(event.target.value)} placeholder="예: SR-0001" />
+								<input
+									type="text"
+									className={styles.modalFieldControl}
+									value={importForm.workKey}
+									onChange={handleChangeImportWorkKey}
+									placeholder="예: SR-0001"
+								/>
 							</label>
 							<div className={styles.modalActionRow}>
-								<button type="submit" className={styles.primaryButton} disabled={isImportSaving}>
+								<button type="submit" className={styles.primaryButton} disabled={isImportProjectLoading || isImportSaving}>
 									{isImportSaving ? "가져오는 중..." : "가져오기"}
 								</button>
 								<button type="button" className={styles.secondaryButton} onClick={() => setIsImportModalOpen(false)} disabled={isImportSaving}>

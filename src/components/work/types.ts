@@ -270,6 +270,16 @@ export interface WorkManualCreateResponse {
 	workKey: string;
 }
 
+// SR 가져오기 모달 입력 상태를 정의합니다.
+export interface WorkImportFormState {
+	// 선택된 회사 번호 문자열입니다.
+	workCompanySeq: string;
+	// 선택된 프로젝트 번호 문자열입니다.
+	workCompanyProjectSeq: string;
+	// 입력한 업무 키입니다.
+	workKey: string;
+}
+
 // SR 가져오기 요청을 정의합니다.
 export interface WorkImportRequest {
 	// 회사 번호입니다.
