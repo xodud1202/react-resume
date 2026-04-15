@@ -73,6 +73,8 @@ interface DetailEditFormState {
 	title: string;
 	// 상태 코드입니다.
 	workStatCd: string;
+	// IT 담당자입니다.
+	itManager: string;
 	// 담당자입니다.
 	coManager: string;
 	// 업무 생성일시입니다.
@@ -144,6 +146,7 @@ function createEmptyDetailEditForm(): DetailEditFormState {
 		workSeq: 0,
 		title: "",
 		workStatCd: "",
+		itManager: "",
 		coManager: "",
 		workCreateDt: "",
 		workStartDt: "",
@@ -216,6 +219,7 @@ function buildDetailUpdateRequest(form: DetailEditFormState): WorkDetailUpdateRe
 		workSeq: form.workSeq,
 		title: form.title,
 		workStatCd: form.workStatCd,
+		itManager: form.itManager,
 		coManager: form.coManager,
 		workCreateDt: form.workCreateDt,
 		workStartDt: form.workStartDt,
@@ -235,6 +239,7 @@ function createDetailEditForm(detail: WorkDetail | null): DetailEditFormState {
 		workSeq: detail.workSeq,
 		title: detail.title || "",
 		workStatCd: detail.workStatCd || "",
+		itManager: detail.itManager || "",
 		coManager: detail.coManager || "",
 		workCreateDt: detail.workCreateDt || "",
 		workStartDt: resolveDateInputValue(detail.workStartDt),
@@ -920,15 +925,15 @@ export default function WorkWorkspacePage() {
 	};
 
 	// 공수 입력 변경을 로컬 폼 상태에 반영합니다.
-	const handleChangeDetailField = (fieldName: "workTime", value: string) => {
+	const handleChangeDetailField = (fieldName: "itManager" | "coManager" | "workTime", value: string) => {
 		setDetailEditForm((prevState) => ({
 			...prevState,
 			[fieldName]: value,
 		}));
 	};
 
-	// blur 또는 Enter 시 공수 입력을 저장합니다.
-	const handleCommitDetailField = async (fieldName: "workTime") => {
+	// blur 또는 Enter 시 텍스트/공수 입력을 저장합니다.
+	const handleCommitDetailField = async (fieldName: "itManager" | "coManager" | "workTime") => {
 		const nextForm = {
 			...detailEditForm,
 			[fieldName]: detailEditForm[fieldName],
@@ -939,7 +944,7 @@ export default function WorkWorkspacePage() {
 	// 텍스트 입력 Enter 저장을 처리합니다.
 	const handleKeyDownCommitInput = async (
 		event: ReactKeyboardEvent<HTMLInputElement>,
-		fieldName: "workTime",
+		fieldName: "itManager" | "coManager" | "workTime",
 	) => {
 		if (event.key !== "Enter") {
 			return;
@@ -1521,14 +1526,30 @@ export default function WorkWorkspacePage() {
 										<div className={styles.metaRow}>
 											<div className={styles.metaInlineField}>
 												<span className={styles.metaLabel}>IT담당자</span>
-												<div className={styles.metaValueShell}>
-													<span className={styles.metaReadonlyValue}>{selectedDetail.itManager || "-"}</span>
+												<div className={styles.metaControl}>
+													<input
+														type="text"
+														className={styles.metaInput}
+														value={detailEditForm.itManager}
+														onChange={(event) => handleChangeDetailField("itManager", event.target.value)}
+														onBlur={() => void handleCommitDetailField("itManager")}
+														onKeyDown={(event) => void handleKeyDownCommitInput(event, "itManager")}
+														placeholder="IT담당자 입력"
+													/>
 												</div>
 											</div>
 											<div className={styles.metaInlineField}>
 												<span className={styles.metaLabel}>업무담당자</span>
-												<div className={styles.metaValueShell}>
-													<span className={styles.metaReadonlyValue}>{detailEditForm.coManager || "-"}</span>
+												<div className={styles.metaControl}>
+													<input
+														type="text"
+														className={styles.metaInput}
+														value={detailEditForm.coManager}
+														onChange={(event) => handleChangeDetailField("coManager", event.target.value)}
+														onBlur={() => void handleCommitDetailField("coManager")}
+														onKeyDown={(event) => void handleKeyDownCommitInput(event, "coManager")}
+														placeholder="업무담당자 입력"
+													/>
 												</div>
 											</div>
 											<div className={styles.metaInlineField}>
@@ -1623,41 +1644,6 @@ export default function WorkWorkspacePage() {
 
 									<section className={styles.detailSection}>
 										<div className={styles.sectionHeader}>
-											<h2 className={styles.sectionTitle}>댓글쓰기</h2>
-											<span className={styles.sectionHint}>react-quill-new 적용</span>
-										</div>
-										<div className={styles.replyEditorShell}>
-											<div className={styles.quillShell}>
-												<LazyQuillEditor
-													id="work-reply-editor"
-													ref={replyQuill.quillRef}
-													theme="snow"
-													value={replyComment}
-													onChange={replyQuill.handleEditorChange}
-													modules={replyQuill.quillModules}
-													formats={replyQuill.quillFormats}
-												/>
-											</div>
-											<div className={styles.replyComposerFooter}>
-												<div className={`${styles.fileTileGrid} ${styles.replyComposerFiles}`}>
-													{replyFiles.map((fileItem, fileIndex) => renderSelectedFileTile(fileItem, `reply-${fileIndex}`, () => handleRemoveReplyFile(fileIndex)))}
-													<button type="button" className={`${styles.fileTile} ${styles.fileTileAdd}`} onClick={() => replyFileInputRef.current?.click()}>
-														<span className={styles.fileAddIcon}>+</span>
-														<span className={styles.fileNameLabel}>댓글 파일</span>
-													</button>
-												</div>
-												<div className={styles.replyComposerActions}>
-													<button type="button" className={`${styles.primaryButton} ${styles.replyComposerSubmitButton}`} onClick={() => void handleSaveReply()} disabled={isReplySaving}>
-														{isReplySaving ? "저장 중..." : "댓글 등록"}
-													</button>
-												</div>
-											</div>
-											<input ref={replyFileInputRef} type="file" multiple className={styles.hiddenFileInput} onChange={handleChangeReplyFiles} />
-										</div>
-									</section>
-
-									<section className={styles.detailSection}>
-										<div className={styles.sectionHeader}>
 											<h2 className={styles.sectionTitle}>댓글 목록</h2>
 											<span className={styles.sectionHint}>{detailResponse?.replyList.length ?? 0}개</span>
 										</div>
@@ -1734,6 +1720,41 @@ export default function WorkWorkspacePage() {
 											</div>
 										)}
 									</section>
+
+									<section className={styles.detailSection}>
+										<div className={styles.sectionHeader}>
+											<h2 className={styles.sectionTitle}>댓글쓰기</h2>
+											<span className={styles.sectionHint}>react-quill-new 적용</span>
+										</div>
+										<div className={styles.replyEditorShell}>
+											<div className={styles.quillShell}>
+												<LazyQuillEditor
+													id="work-reply-editor"
+													ref={replyQuill.quillRef}
+													theme="snow"
+													value={replyComment}
+													onChange={replyQuill.handleEditorChange}
+													modules={replyQuill.quillModules}
+													formats={replyQuill.quillFormats}
+												/>
+											</div>
+											<div className={styles.replyComposerFooter}>
+												<div className={`${styles.fileTileGrid} ${styles.replyComposerFiles}`}>
+													{replyFiles.map((fileItem, fileIndex) => renderSelectedFileTile(fileItem, `reply-${fileIndex}`, () => handleRemoveReplyFile(fileIndex)))}
+													<button type="button" className={`${styles.fileTile} ${styles.fileTileAdd}`} onClick={() => replyFileInputRef.current?.click()}>
+														<span className={styles.fileAddIcon}>+</span>
+														<span className={styles.fileNameLabel}>댓글 파일</span>
+													</button>
+												</div>
+												<div className={styles.replyComposerActions}>
+													<button type="button" className={`${styles.primaryButton} ${styles.replyComposerSubmitButton}`} onClick={() => void handleSaveReply()} disabled={isReplySaving}>
+														{isReplySaving ? "저장 중..." : "댓글 등록"}
+													</button>
+												</div>
+											</div>
+											<input ref={replyFileInputRef} type="file" multiple className={styles.hiddenFileInput} onChange={handleChangeReplyFiles} />
+										</div>
+									</section>
 								</div>
 							) : null}
 						</main>
@@ -1789,38 +1810,40 @@ export default function WorkWorkspacePage() {
 				{isImportModalOpen ? (
 					<WorkModalShell title="SR 가져오기" onClose={() => !isImportSaving && setIsImportModalOpen(false)}>
 						<form className={styles.modalForm} onSubmit={(event) => void handleSubmitImport(event)}>
-							<label className={styles.modalFieldLabel}>
-								회사
-								<select
-									className={styles.modalFieldControl}
-									value={importForm.workCompanySeq}
-									onChange={(event) => void handleChangeImportCompany(event)}
-									disabled={isImportSaving}
-								>
-									<option value="" disabled>회사를 선택하세요</option>
-									{companyList.map((companyItem) => (
-										<option key={companyItem.workCompanySeq} value={companyItem.workCompanySeq}>
-											{companyItem.workCompanyNm}
-										</option>
-									))}
-								</select>
-							</label>
-							<label className={styles.modalFieldLabel}>
-								프로젝트
-								<select
-									className={styles.modalFieldControl}
-									value={importForm.workCompanyProjectSeq}
-									onChange={handleChangeImportProject}
-									disabled={!importForm.workCompanySeq || isImportProjectLoading || isImportSaving}
-								>
-									<option value="" disabled>{importProjectPlaceholderText}</option>
-									{importProjectList.map((projectItem) => (
-										<option key={projectItem.workCompanyProjectSeq} value={projectItem.workCompanyProjectSeq}>
-											{projectItem.workCompanyProjectNm}
-										</option>
-									))}
-								</select>
-							</label>
+							<div className={styles.importSelectRow}>
+								<label className={styles.modalFieldLabel}>
+									회사
+									<select
+										className={styles.modalFieldControl}
+										value={importForm.workCompanySeq}
+										onChange={(event) => void handleChangeImportCompany(event)}
+										disabled={isImportSaving}
+									>
+										<option value="" disabled>회사를 선택하세요</option>
+										{companyList.map((companyItem) => (
+											<option key={companyItem.workCompanySeq} value={companyItem.workCompanySeq}>
+												{companyItem.workCompanyNm}
+											</option>
+										))}
+									</select>
+								</label>
+								<label className={styles.modalFieldLabel}>
+									프로젝트
+									<select
+										className={styles.modalFieldControl}
+										value={importForm.workCompanyProjectSeq}
+										onChange={handleChangeImportProject}
+										disabled={!importForm.workCompanySeq || isImportProjectLoading || isImportSaving}
+									>
+										<option value="" disabled>{importProjectPlaceholderText}</option>
+										{importProjectList.map((projectItem) => (
+											<option key={projectItem.workCompanyProjectSeq} value={projectItem.workCompanyProjectSeq}>
+												{projectItem.workCompanyProjectNm}
+											</option>
+										))}
+									</select>
+								</label>
+							</div>
 							<label className={styles.modalFieldLabel}>
 								업무 키
 								<input

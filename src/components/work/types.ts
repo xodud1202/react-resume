@@ -308,6 +308,8 @@ export interface WorkDetailUpdateRequest {
 	title: string;
 	// 업무 상태 코드입니다.
 	workStatCd: string;
+	// IT 담당자입니다.
+	itManager: string;
 	// 업무 담당자입니다.
 	coManager: string;
 	// 업무 생성 일시입니다.
