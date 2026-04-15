@@ -2,6 +2,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { createPortal } from "react-dom";
 import {
 	createSnippetTag,
 	fetchSnippetDetail,
@@ -28,6 +29,28 @@ const SnippetCodeEditor = dynamic(() => import("@/components/snippet/SnippetCode
 
 export type SnippetEditorMode = "create" | "edit";
 const DEFAULT_NEW_TAG_COLOR_HEX = "#3B7EA1";
+
+interface SelectMenuPosition {
+	top: number;
+	left: number;
+	width: number;
+}
+
+// 트리거 버튼 기준으로 드롭다운 오버레이 위치를 계산합니다.
+function resolveSelectMenuPosition(anchorElement: HTMLElement | null, minimumWidth: number): SelectMenuPosition | null {
+	if (!anchorElement || typeof window === "undefined") {
+		return null;
+	}
+
+	const anchorRect = anchorElement.getBoundingClientRect();
+	const resolvedWidth = Math.max(anchorRect.width, minimumWidth);
+	const maxLeft = Math.max(12, window.innerWidth - resolvedWidth - 12);
+	return {
+		top: anchorRect.bottom + 6,
+		left: Math.min(Math.max(12, anchorRect.left), maxLeft),
+		width: resolvedWidth,
+	};
+}
 
 interface SnippetEditorFormProps {
 	mode: SnippetEditorMode;
@@ -88,6 +111,16 @@ export default function SnippetEditorForm({
 	const [form, setForm] = useState<SnippetSaveRequest>(createDefaultForm(defaultLanguageCd));
 	const [availableTagList, setAvailableTagList] = useState<SnippetTag[]>(bootstrap.tagList);
 	const [tagInputValue, setTagInputValue] = useState("");
+	const languageSelectRef = useRef<HTMLDivElement | null>(null);
+	const folderSelectRef = useRef<HTMLDivElement | null>(null);
+	const languageMenuRef = useRef<HTMLDivElement | null>(null);
+	const folderMenuRef = useRef<HTMLDivElement | null>(null);
+	const languageTriggerRef = useRef<HTMLButtonElement | null>(null);
+	const folderTriggerRef = useRef<HTMLButtonElement | null>(null);
+	const [isLanguageSelectOpen, setIsLanguageSelectOpen] = useState(false);
+	const [isFolderSelectOpen, setIsFolderSelectOpen] = useState(false);
+	const [languageMenuPosition, setLanguageMenuPosition] = useState<SelectMenuPosition | null>(null);
+	const [folderMenuPosition, setFolderMenuPosition] = useState<SelectMenuPosition | null>(null);
 
 	// 컴포넌트 마운트 상태를 추적해 언마운트 후 상태 갱신을 방지합니다.
 	useEffect(() => {
@@ -127,6 +160,69 @@ export default function SnippetEditorForm({
 			});
 		});
 	}, [bootstrap.tagList]);
+
+	// 바깥 클릭과 ESC 입력으로 열린 드롭다운을 닫습니다.
+	useEffect(() => {
+		const handleDocumentMouseDown = (event: MouseEvent) => {
+			const targetNode = event.target as Node;
+			if (languageSelectRef.current?.contains(targetNode)) {
+				return;
+			}
+			if (folderSelectRef.current?.contains(targetNode)) {
+				return;
+			}
+			if (languageMenuRef.current?.contains(targetNode)) {
+				return;
+			}
+			if (folderMenuRef.current?.contains(targetNode)) {
+				return;
+			}
+			setIsLanguageSelectOpen(false);
+			setIsFolderSelectOpen(false);
+			setLanguageMenuPosition(null);
+			setFolderMenuPosition(null);
+		};
+
+		const handleWindowKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				setIsLanguageSelectOpen(false);
+				setIsFolderSelectOpen(false);
+				setLanguageMenuPosition(null);
+				setFolderMenuPosition(null);
+			}
+		};
+
+		document.addEventListener("mousedown", handleDocumentMouseDown);
+		window.addEventListener("keydown", handleWindowKeyDown);
+		return () => {
+			document.removeEventListener("mousedown", handleDocumentMouseDown);
+			window.removeEventListener("keydown", handleWindowKeyDown);
+		};
+	}, []);
+
+	// 열린 드롭다운 위치를 리사이즈와 스크롤에 맞춰 갱신합니다.
+	useEffect(() => {
+		if (!isLanguageSelectOpen && !isFolderSelectOpen) {
+			return;
+		}
+
+		const updateOverlayPosition = () => {
+			if (isLanguageSelectOpen) {
+				setLanguageMenuPosition(resolveSelectMenuPosition(languageTriggerRef.current, 220));
+			}
+			if (isFolderSelectOpen) {
+				setFolderMenuPosition(resolveSelectMenuPosition(folderTriggerRef.current, 220));
+			}
+		};
+
+		updateOverlayPosition();
+		window.addEventListener("resize", updateOverlayPosition);
+		document.addEventListener("scroll", updateOverlayPosition, true);
+		return () => {
+			window.removeEventListener("resize", updateOverlayPosition);
+			document.removeEventListener("scroll", updateOverlayPosition, true);
+		};
+	}, [isFolderSelectOpen, isLanguageSelectOpen]);
 
 	// 모드와 대상 번호에 맞춰 편집 폼을 초기화합니다.
 	useEffect(() => {
@@ -186,13 +282,50 @@ export default function SnippetEditorForm({
 		}));
 	};
 
+	// 언어 선택값을 갱신하고 드롭다운을 닫습니다.
+	const handleLanguageSelect = (languageCd: string) => {
+		handleFieldChange("languageCd", languageCd);
+		setIsLanguageSelectOpen(false);
+		setLanguageMenuPosition(null);
+	};
+
 	// 폴더 선택값을 갱신합니다.
-	const handleFolderChange = (value: string) => {
-		// 빈 값은 무폴더로 저장되도록 null로 정규화합니다.
+	const handleFolderSelect = (folderNo: number | null) => {
+		// 무폴더는 null로 저장하고, 선택 후 드롭다운을 닫습니다.
 		setForm((previousForm) => ({
 			...previousForm,
-			folderNo: value.trim() === "" ? null : Number(value),
+			folderNo,
 		}));
+		setIsFolderSelectOpen(false);
+		setFolderMenuPosition(null);
+	};
+
+	// 언어 드롭다운 열림 상태를 전환하고 현재 위치를 계산합니다.
+	const handleLanguageTriggerClick = () => {
+		if (isLanguageSelectOpen) {
+			setIsLanguageSelectOpen(false);
+			setLanguageMenuPosition(null);
+			return;
+		}
+
+		setIsFolderSelectOpen(false);
+		setFolderMenuPosition(null);
+		setLanguageMenuPosition(resolveSelectMenuPosition(languageTriggerRef.current, 220));
+		setIsLanguageSelectOpen(true);
+	};
+
+	// 폴더 드롭다운 열림 상태를 전환하고 현재 위치를 계산합니다.
+	const handleFolderTriggerClick = () => {
+		if (isFolderSelectOpen) {
+			setIsFolderSelectOpen(false);
+			setFolderMenuPosition(null);
+			return;
+		}
+
+		setIsLanguageSelectOpen(false);
+		setLanguageMenuPosition(null);
+		setFolderMenuPosition(resolveSelectMenuPosition(folderTriggerRef.current, 220));
+		setIsFolderSelectOpen(true);
 	};
 
 	// 즐겨찾기 체크 상태를 갱신합니다.
@@ -355,8 +488,71 @@ export default function SnippetEditorForm({
 	const normalizedTagInputKey = normalizeTagSearchKey(tagInputValue);
 	const normalizedTagCreateValue = normalizeTagCreateName(tagInputValue);
 	const matchedTag = findMatchedTag(availableTagList, tagInputValue);
+	const selectedLanguage = bootstrap.languageList.find((language) => language.languageCd === form.languageCd) ?? null;
+	const selectedFolder = form.folderNo != null ? bootstrap.folderList.find((folder) => folder.folderNo === form.folderNo) ?? null : null;
 	const selectedTagList = availableTagList.filter((tag) => form.tagNoList.includes(tag.tagNo));
 	const filteredTagSuggestionList = filterTagSuggestionList(availableTagList, tagInputValue, form.tagNoList);
+	const languageSelectMenuLayer =
+		typeof document !== "undefined" && isLanguageSelectOpen && languageMenuPosition
+			? createPortal(
+					<div
+						ref={languageMenuRef}
+						className={styles.selectMenu}
+						style={{ top: languageMenuPosition.top, left: languageMenuPosition.left, width: languageMenuPosition.width }}
+						role="listbox"
+						aria-label="언어 선택"
+					>
+						{bootstrap.languageList.map((language) => (
+							<button
+								key={language.languageCd}
+								type="button"
+								role="option"
+								aria-selected={form.languageCd === language.languageCd}
+								className={`${styles.selectOption} ${form.languageCd === language.languageCd ? styles.selectOptionActive : ""}`.trim()}
+								onClick={() => handleLanguageSelect(language.languageCd)}
+							>
+								{language.languageNm}
+							</button>
+						))}
+					</div>,
+					document.body,
+				)
+			: null;
+	const folderSelectMenuLayer =
+		typeof document !== "undefined" && isFolderSelectOpen && folderMenuPosition
+			? createPortal(
+					<div
+						ref={folderMenuRef}
+						className={styles.selectMenu}
+						style={{ top: folderMenuPosition.top, left: folderMenuPosition.left, width: folderMenuPosition.width }}
+						role="listbox"
+						aria-label="폴더 선택"
+					>
+						<button
+							type="button"
+							role="option"
+							aria-selected={form.folderNo === null}
+							className={`${styles.selectOption} ${form.folderNo === null ? styles.selectOptionActive : ""}`.trim()}
+							onClick={() => handleFolderSelect(null)}
+						>
+							무폴더
+						</button>
+						{bootstrap.folderList.map((folder) => (
+							<button
+								key={folder.folderNo}
+								type="button"
+								role="option"
+								aria-selected={form.folderNo === folder.folderNo}
+								className={`${styles.selectOption} ${form.folderNo === folder.folderNo ? styles.selectOptionActive : ""}`.trim()}
+								onClick={() => handleFolderSelect(folder.folderNo)}
+							>
+								{folder.folderNm}
+							</button>
+						))}
+					</div>,
+					document.body,
+				)
+			: null;
 
 	return (
 		<div className={shellClassName}>
@@ -410,32 +606,41 @@ export default function SnippetEditorForm({
 									/>
 								</label>
 
-								<label className={styles.fieldGroup}>
+								<div className={styles.fieldGroup} ref={languageSelectRef}>
 									<span className={styles.fieldLabel}>언어</span>
-									<select
-										value={form.languageCd}
-										onChange={(event) => handleFieldChange("languageCd", event.target.value)}
-										className={styles.selectBox}
+									<button
+										ref={languageTriggerRef}
+										type="button"
+										className={styles.selectTrigger}
+										onClick={handleLanguageTriggerClick}
+										aria-haspopup="listbox"
+										aria-expanded={isLanguageSelectOpen}
+										aria-label="언어 선택"
 									>
-										{bootstrap.languageList.map((language) => (
-											<option key={language.languageCd} value={language.languageCd}>
-												{language.languageNm}
-											</option>
-										))}
-									</select>
-								</label>
+										<span className={styles.selectTriggerValue}>{selectedLanguage?.languageNm ?? form.languageCd}</span>
+										<span className={styles.selectTriggerChevron} aria-hidden="true">
+											▾
+										</span>
+									</button>
+								</div>
 
-								<label className={styles.fieldGroup}>
+								<div className={styles.fieldGroup} ref={folderSelectRef}>
 									<span className={styles.fieldLabel}>폴더</span>
-									<select value={form.folderNo ?? ""} onChange={(event) => handleFolderChange(event.target.value)} className={styles.selectBox}>
-										<option value="">무폴더</option>
-										{bootstrap.folderList.map((folder) => (
-											<option key={folder.folderNo} value={folder.folderNo}>
-												{folder.folderNm}
-											</option>
-										))}
-									</select>
-								</label>
+									<button
+										ref={folderTriggerRef}
+										type="button"
+										className={styles.selectTrigger}
+										onClick={handleFolderTriggerClick}
+										aria-haspopup="listbox"
+										aria-expanded={isFolderSelectOpen}
+										aria-label="폴더 선택"
+									>
+										<span className={styles.selectTriggerValue}>{selectedFolder?.folderNm ?? "무폴더"}</span>
+										<span className={styles.selectTriggerChevron} aria-hidden="true">
+											▾
+										</span>
+									</button>
+								</div>
 
 								<label className={styles.checkboxField}>
 									<input type="checkbox" checked={form.favoriteYn === "Y"} onChange={(event) => handleFavoriteChange(event.target.checked)} />
@@ -588,6 +793,8 @@ export default function SnippetEditorForm({
 					) : null}
 				</div>
 			) : null}
+			{languageSelectMenuLayer}
+			{folderSelectMenuLayer}
 		</div>
 	);
 }
