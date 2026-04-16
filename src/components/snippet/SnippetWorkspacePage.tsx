@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import FeedbackLayer from "@/components/common/FeedbackLayer";
+import useResizableSplitLayout from "@/components/common/useResizableSplitLayout";
 import useFeedbackLayer from "@/components/common/useFeedbackLayer";
 import {
 	fetchSnippetBootstrap,
@@ -129,6 +130,15 @@ function CopyIcon() {
 // 스니펫 메인 작업 화면을 렌더링합니다.
 export default function SnippetWorkspacePage() {
 	const router = useRouter();
+	const snippetSplitLayout = useResizableSplitLayout({
+		defaultPrimaryWidth: 352,
+		minPrimaryWidth: 300,
+		maxPrimaryWidth: 1800,
+		maxPrimaryWidthRatio: 0.8,
+		minSecondaryWidth: 220,
+		collapseBreakpoint: 1160,
+		primaryWidthCssVar: "--sidebar-width",
+	});
 	const { successMessage, isSuccessVisible, errorMessage, showSuccess, showError, clearError } = useFeedbackLayer();
 	const topFilterScrollerRef = useRef<HTMLDivElement | null>(null);
 	const folderSelectRef = useRef<HTMLDivElement | null>(null);
@@ -1130,7 +1140,7 @@ export default function SnippetWorkspacePage() {
 				) : null}
 
 				{!isInitializing && bootstrap ? (
-					<div className={styles.workspaceShell}>
+					<div className={styles.workspaceShell} ref={snippetSplitLayout.containerRef} style={snippetSplitLayout.layoutStyle}>
 						<aside className={styles.sidebar}>
 							<section className={styles.searchCard}>
 								<form className={styles.searchForm} onSubmit={handleSearchSubmit}>
@@ -1247,6 +1257,20 @@ export default function SnippetWorkspacePage() {
 								로그아웃
 							</button>
 						</aside>
+						<div
+							role="separator"
+							tabIndex={snippetSplitLayout.isResizeEnabled ? 0 : -1}
+							aria-orientation="vertical"
+							aria-label="스니펫 화면 좌우 크기 조절"
+							aria-valuemin={Math.round(snippetSplitLayout.minimumPrimaryWidth)}
+							aria-valuemax={Math.round(snippetSplitLayout.maximumPrimaryWidth)}
+							aria-valuenow={Math.round(snippetSplitLayout.primaryWidth)}
+							className={`${styles.resizeHandle} ${snippetSplitLayout.isResizing ? styles.resizeHandleActive : ""}`}
+							onPointerDown={snippetSplitLayout.handleResizePointerDown}
+							onKeyDown={snippetSplitLayout.handleResizeKeyDown}
+						>
+							<span className={styles.resizeHandleGrip} />
+						</div>
 
 						<section className={styles.mainColumn}>
 							<div className={styles.topFilterBar}>

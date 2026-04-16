@@ -65,10 +65,55 @@
 }
 
 .workspaceShell {
+	--workspace-gap: 1rem;
+	--sidebar-width: 340px;
 	display: grid;
-	grid-template-columns: 340px minmax(0, 1fr);
-	gap: 1rem;
+	grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+	gap: var(--workspace-gap);
 	align-items: start;
+	position: relative;
+}
+
+.resizeHandle {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: calc(var(--sidebar-width) + (var(--workspace-gap) / 2));
+	z-index: 5;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	padding: 0;
+	transform: translateX(-50%);
+	background: transparent;
+	border: 0;
+	cursor: col-resize;
+	touch-action: none;
+	outline: none;
+}
+
+.resizeHandleGrip {
+	display: block;
+	width: 4px;
+	height: 76px;
+	border-radius: 999px;
+	background: rgba(148, 163, 184, 0.28);
+	box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.24);
+	transition:
+		background 0.14s ease,
+		box-shadow 0.14s ease,
+		height 0.14s ease;
+}
+
+.resizeHandle:hover .resizeHandleGrip,
+.resizeHandle:focus-visible .resizeHandleGrip,
+.resizeHandleActive .resizeHandleGrip {
+	height: 108px;
+	background: rgba(249, 115, 22, 0.72);
+	box-shadow:
+		0 0 0 1px rgba(249, 115, 22, 0.26),
+		0 0 18px rgba(249, 115, 22, 0.22);
 }
 
 .sidebar,
@@ -90,6 +135,7 @@
 	gap: 1rem;
 	height: calc(100vh - 2rem);
 	padding: 1rem;
+	min-width: 0;
 }
 
 .sidebarTop,
@@ -102,6 +148,7 @@
 .modalForm {
 	display: grid;
 	gap: 0.9rem;
+	min-width: 0;
 }
 
 .selectRow,
@@ -362,8 +409,14 @@
 
 .sidebarListSection {
 	min-height: 0;
-	overflow: auto;
+	min-width: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
 	padding-right: 0.1rem;
+}
+
+.statusSectionBlock {
+	min-width: 0;
 }
 
 .statusSectionBlock + .statusSectionBlock {
@@ -395,14 +448,22 @@
 	gap: 0.55rem;
 }
 
+.statusSectionList {
+	grid-template-columns: minmax(0, 1fr);
+	min-width: 0;
+}
+
 .workCard {
-	max-width: 280px;
+	width: 100%;
+	min-width: 0;
+	max-width: 100%;
 	padding: 0.68rem 0.78rem;
 	border: 1px solid var(--work-border);
 	border-radius: 12px;
 	background: rgba(255, 255, 255, 0.02);
 	text-align: left;
 	cursor: pointer;
+	box-sizing: border-box;
 }
 
 .workCardActive {
@@ -411,8 +472,51 @@
 	box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.18);
 }
 
+.workCardTitleRow {
+	display: flex;
+	align-items: center;
+	gap: 0.55rem;
+	min-width: 0;
+}
+
+.workPriorityIcon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 0.95rem;
+	height: 0.95rem;
+	color: var(--work-muted);
+}
+
+.workPriorityIcon svg {
+	display: block;
+	width: 100%;
+	height: 100%;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.8;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.workPriorityIconHigh {
+	color: #fb923c;
+}
+
+.workPriorityIconNormal {
+	color: rgba(226, 232, 240, 0.72);
+}
+
+.workPriorityIconLow {
+	color: #7dd3fc;
+}
+
 .workCardTitle {
 	display: block;
+	flex: 1;
+	min-width: 0;
+	max-width: 100%;
 	font-size: 13px;
 	line-height: 1.35;
 	white-space: nowrap;
@@ -421,9 +525,13 @@
 }
 
 .loadMoreButton {
-	width: calc(100% - 10px);
+	display: block;
+	width: 100%;
+	min-width: 0;
+	max-width: 100%;
 	height: 38px;
 	margin-top: 0.55rem;
+	box-sizing: border-box;
 }
 
 .sidebarBottom {
@@ -760,6 +868,10 @@
 @media (max-width: 1024px) {
 	.workspaceShell {
 		grid-template-columns: 1fr;
+	}
+
+	.resizeHandle {
+		display: none;
 	}
 
 	.sidebar {

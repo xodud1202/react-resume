@@ -2,6 +2,7 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import FeedbackLayer from "@/components/common/FeedbackLayer";
+import useResizableSplitLayout from "@/components/common/useResizableSplitLayout";
 import useFeedbackLayer from "@/components/common/useFeedbackLayer";
 import AdminDateInput from "@/components/work/AdminDateInput";
 import LazyQuillEditor from "@/components/work/LazyQuillEditor";
@@ -346,6 +347,74 @@ function resolveStatusFilterButtonLabel(selectedCodeList: string[], workStatList
 	return `상태 ${selectedCodeList.length}개`;
 }
 
+// 업무 우선순위를 아이콘 표시용 키로 변환합니다.
+function resolveWorkPriorityIconVariant(workPriorCd: string, workPriorNm: string): "high" | "normal" | "low" | "none" {
+	const normalizedWorkPriorCode = trimText(workPriorCd).toUpperCase();
+	if (normalizedWorkPriorCode === "WORK_PRIOR_01") {
+		return "high";
+	}
+	if (normalizedWorkPriorCode === "WORK_PRIOR_02") {
+		return "normal";
+	}
+	if (normalizedWorkPriorCode === "WORK_PRIOR_03") {
+		return "low";
+	}
+
+	const normalizedWorkPriorName = trimText(workPriorNm);
+	if (normalizedWorkPriorName.includes("높")) {
+		return "high";
+	}
+	if (normalizedWorkPriorName.includes("낮")) {
+		return "low";
+	}
+	if (normalizedWorkPriorName.includes("보통") || normalizedWorkPriorName.includes("중")) {
+		return "normal";
+	}
+	return "none";
+}
+
+// 업무 우선순위 아이콘을 렌더링합니다.
+function WorkPriorityIcon({
+	workPriorCd,
+	workPriorNm,
+}: {
+	// 업무 우선순위 코드입니다.
+	workPriorCd: string;
+	// 업무 우선순위명입니다.
+	workPriorNm: string;
+}) {
+	const iconVariant = resolveWorkPriorityIconVariant(workPriorCd, workPriorNm);
+	if (iconVariant === "none") {
+		return null;
+	}
+
+	const iconLabel = trimText(workPriorNm) || "우선순위 미지정";
+	return (
+		<span
+			className={`${styles.workPriorityIcon} ${
+				iconVariant === "high"
+					? styles.workPriorityIconHigh
+					: iconVariant === "low"
+						? styles.workPriorityIconLow
+						: styles.workPriorityIconNormal
+			}`}
+			aria-label={iconLabel}
+			title={iconLabel}
+		>
+			<svg viewBox="0 0 16 16" aria-hidden="true">
+				{iconVariant === "high" ? <path d="M3 10.5 8 5.5l5 5" /> : null}
+				{iconVariant === "normal" ? (
+					<>
+						<path d="M3.5 6h9" />
+						<path d="M3.5 10h9" />
+					</>
+				) : null}
+				{iconVariant === "low" ? <path d="m3 5.5 5 5 5-5" /> : null}
+			</svg>
+		</span>
+	);
+}
+
 // Quill HTML에서 실제 보이는 텍스트가 있는지 판단합니다.
 function hasVisibleEditorText(value: string): boolean {
 	return value.replace(/<img[^>]*>/gi, " IMG ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() !== "";
@@ -480,6 +549,15 @@ export default function WorkWorkspacePage() {
 	const statusFilterAllInputRef = useRef<HTMLInputElement | null>(null);
 	const replyFileInputRef = useRef<HTMLInputElement | null>(null);
 	const editingReplyFileInputRef = useRef<HTMLInputElement | null>(null);
+	const workSplitLayout = useResizableSplitLayout({
+		defaultPrimaryWidth: 340,
+		minPrimaryWidth: 280,
+		maxPrimaryWidth: 1600,
+		maxPrimaryWidthRatio: 0.8,
+		minSecondaryWidth: 220,
+		collapseBreakpoint: 1024,
+		primaryWidthCssVar: "--sidebar-width",
+	});
 	const { successMessage, isSuccessVisible, errorMessage, showSuccess, showError, clearError } = useFeedbackLayer();
 	const [isInitializing, setIsInitializing] = useState(true);
 	const [isListLoading, setIsListLoading] = useState(false);
@@ -1492,7 +1570,7 @@ export default function WorkWorkspacePage() {
 				/>
 
 				{!isInitializing ? (
-					<div className={styles.workspaceShell}>
+					<div className={styles.workspaceShell} ref={workSplitLayout.containerRef} style={workSplitLayout.layoutStyle}>
 						<aside className={styles.sidebar}>
 							<div className={styles.sidebarTop}>
 								<div className={styles.selectRow}>
@@ -1592,7 +1670,10 @@ export default function WorkWorkspacePage() {
 													className={`${styles.workCard} ${selectedWorkSeq === rowItem.workSeq ? styles.workCardActive : ""}`}
 													onClick={() => setSelectedWorkSeq(rowItem.workSeq)}
 												>
-													<span className={styles.workCardTitle}>{rowItem.title || rowItem.workKey || "제목 없음"}</span>
+													<span className={styles.workCardTitleRow}>
+														<WorkPriorityIcon workPriorCd={rowItem.workPriorCd} workPriorNm={rowItem.workPriorNm} />
+														<span className={styles.workCardTitle}>{rowItem.title || rowItem.workKey || "제목 없음"}</span>
+													</span>
 												</button>
 											))}
 										</div>
@@ -1624,6 +1705,20 @@ export default function WorkWorkspacePage() {
 								</button>
 							</div>
 						</aside>
+						<div
+							role="separator"
+							tabIndex={workSplitLayout.isResizeEnabled ? 0 : -1}
+							aria-orientation="vertical"
+							aria-label="업무 화면 좌우 크기 조절"
+							aria-valuemin={Math.round(workSplitLayout.minimumPrimaryWidth)}
+							aria-valuemax={Math.round(workSplitLayout.maximumPrimaryWidth)}
+							aria-valuenow={Math.round(workSplitLayout.primaryWidth)}
+							className={`${styles.resizeHandle} ${workSplitLayout.isResizing ? styles.resizeHandleActive : ""}`}
+							onPointerDown={workSplitLayout.handleResizePointerDown}
+							onKeyDown={workSplitLayout.handleResizeKeyDown}
+						>
+							<span className={styles.resizeHandleGrip} />
+						</div>
 
 						<main className={styles.detailPanel}>
 							{!isDetailLoading && !selectedDetail ? (
@@ -1886,11 +1981,11 @@ export default function WorkWorkspacePage() {
 					<WorkModalShell title="업무 수기등록" onClose={() => !isManualSaving && setIsManualModalOpen(false)}>
 						<form className={styles.modalForm} onSubmit={(event) => void handleSubmitManualCreate(event)}>
 							<label className={styles.modalFieldLabel}>
-								제목
+								타이틀
 								<input type="text" className={styles.modalFieldControl} value={manualForm.title} onChange={(event) => setManualForm((prevState) => ({ ...prevState, title: event.target.value }))} />
 							</label>
 							<label className={styles.modalFieldLabel}>
-								담당자
+								업무 담당자
 								<input type="text" className={styles.modalFieldControl} value={manualForm.coManager} onChange={(event) => setManualForm((prevState) => ({ ...prevState, coManager: event.target.value }))} />
 							</label>
 							<label className={styles.modalFieldLabel}>
