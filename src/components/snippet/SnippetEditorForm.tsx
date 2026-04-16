@@ -1,8 +1,10 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
+import FeedbackLayer from "@/components/common/FeedbackLayer";
+import useFeedbackLayer, { saveFeedbackFlashMessage } from "@/components/common/useFeedbackLayer";
 import {
 	createSnippetTag,
 	fetchSnippetDetail,
@@ -29,6 +31,8 @@ const SnippetCodeEditor = dynamic(() => import("@/components/snippet/SnippetCode
 
 export type SnippetEditorMode = "create" | "edit";
 const DEFAULT_NEW_TAG_COLOR_HEX = "#3B7EA1";
+// 단독 신규 저장 후 리다이렉트된 편집 화면에서 1회성 성공 토스트를 이어주기 위한 저장소 키입니다.
+export const SNIPPET_EDITOR_SUCCESS_FLASH_KEY = "snippet-editor-success";
 
 interface SelectMenuPosition {
 	top: number;
@@ -60,6 +64,20 @@ interface SnippetEditorFormProps {
 	onClose?: () => void;
 	onSaved?: (response: SnippetSaveResponse) => Promise<void> | void;
 	onSavingChange?: (saving: boolean) => void;
+}
+
+// 에디터 화면에서 가장 우선순위가 높은 중앙 로딩 문구를 계산합니다.
+function resolveSnippetEditorLoadingMessage(isInitializing: boolean, isSaving: boolean, isCreatingTag: boolean): string {
+	if (isInitializing) {
+		return "에디터 화면을 준비하고 있습니다.";
+	}
+	if (isSaving) {
+		return "스니펫을 저장하고 있습니다.";
+	}
+	if (isCreatingTag) {
+		return "태그를 생성하고 있습니다.";
+	}
+	return "";
 }
 
 // 편집 폼 기본값을 생성합니다.
@@ -102,12 +120,12 @@ export default function SnippetEditorForm({
 }: SnippetEditorFormProps) {
 	const router = useRouter();
 	const isMountedRef = useRef(true);
+	const { successMessage, isSuccessVisible, errorMessage, showSuccess, showError, clearError } = useFeedbackLayer();
 	const isEditMode = mode === "edit";
 	const defaultLanguageCd = bootstrap.languageList[0]?.languageCd ?? "plain_text";
 	const [isInitializing, setIsInitializing] = useState(isEditMode);
 	const [isSaving, setIsSaving] = useState(false);
 	const [isCreatingTag, setIsCreatingTag] = useState(false);
-	const [message, setMessage] = useState("");
 	const [form, setForm] = useState<SnippetSaveRequest>(createDefaultForm(defaultLanguageCd));
 	const [availableTagList, setAvailableTagList] = useState<SnippetTag[]>(bootstrap.tagList);
 	const [tagInputValue, setTagInputValue] = useState("");
@@ -121,6 +139,17 @@ export default function SnippetEditorForm({
 	const [isFolderSelectOpen, setIsFolderSelectOpen] = useState(false);
 	const [languageMenuPosition, setLanguageMenuPosition] = useState<SelectMenuPosition | null>(null);
 	const [folderMenuPosition, setFolderMenuPosition] = useState<SelectMenuPosition | null>(null);
+
+	// 기존 message 호출을 중앙 오류 박스 제어로 변환합니다.
+	const setMessage = useCallback((nextMessage: string) => {
+		if (nextMessage.trim() === "") {
+			clearError();
+			return;
+		}
+		showError(nextMessage);
+	}, [clearError, showError]);
+
+	const blockingLoadingMessage = resolveSnippetEditorLoadingMessage(isInitializing, isSaving, isCreatingTag);
 
 	// 컴포넌트 마운트 상태를 추적해 언마운트 후 상태 갱신을 방지합니다.
 	useEffect(() => {
@@ -230,7 +259,6 @@ export default function SnippetEditorForm({
 
 		// 신규 작성은 기본 폼을, 수정은 상세 조회 결과를 사용합니다.
 		const initializeForm = async () => {
-			setMessage("");
 			setTagInputValue("");
 
 			if (!isEditMode) {
@@ -271,7 +299,7 @@ export default function SnippetEditorForm({
 		return () => {
 			isCancelled = true;
 		};
-	}, [bootstrap.tagList, defaultLanguageCd, isEditMode, snippetNo]);
+	}, [bootstrap.tagList, defaultLanguageCd, isEditMode, setMessage, snippetNo]);
 
 	// 문자열 입력 필드를 갱신합니다.
 	const handleFieldChange = (fieldName: "title" | "summary" | "memo" | "languageCd", value: string) => {
@@ -371,7 +399,6 @@ export default function SnippetEditorForm({
 		}
 
 		setIsCreatingTag(true);
-		setMessage("");
 		const result = await createSnippetTag({
 			tagNm: normalizedTagName,
 			colorHex: DEFAULT_NEW_TAG_COLOR_HEX,
@@ -437,19 +464,19 @@ export default function SnippetEditorForm({
 	const handleDefaultSaveSuccess = async (response: SnippetSaveResponse) => {
 		// popup이 아닌 fallback 페이지에서는 기존 흐름을 유지합니다.
 		if (!isEditMode) {
+			saveFeedbackFlashMessage(SNIPPET_EDITOR_SUCCESS_FLASH_KEY, response.message);
 			await router.replace(`/snippet/edit/${response.snippetNo}`);
 			return;
 		}
 
 		if (isMountedRef.current) {
-			setMessage(response.message);
+			showSuccess(response.message);
 		}
 	};
 
 	// 스니펫 저장을 처리합니다.
 	const handleSave = async () => {
 		setIsSaving(true);
-		setMessage("");
 
 		const requestPath = isEditMode && snippetNo !== null ? `/api/snippet/snippets/${snippetNo}` : "/api/snippet/snippets";
 		const requestMethod = isEditMode ? "PUT" : "POST";
@@ -485,6 +512,7 @@ export default function SnippetEditorForm({
 	const layoutClassName = embedded ? styles.embeddedEditorLayout : styles.editorLayout;
 	const formPanelClassName = `${styles.formPanel} ${embedded ? styles.embeddedFormPanel : ""}`.trim();
 	const formScrollBodyClassName = `${styles.formScrollBody} ${embedded ? styles.embeddedFormScrollBody : ""}`.trim();
+	const isInteractionBlocked = isInitializing || isSaving || isCreatingTag;
 	const normalizedTagInputKey = normalizeTagSearchKey(tagInputValue);
 	const normalizedTagCreateValue = normalizeTagCreateName(tagInputValue);
 	const matchedTag = findMatchedTag(availableTagList, tagInputValue);
@@ -556,6 +584,14 @@ export default function SnippetEditorForm({
 
 	return (
 		<div className={shellClassName}>
+			<FeedbackLayer
+				successMessage={successMessage}
+				isSuccessVisible={isSuccessVisible}
+				errorMessage={errorMessage}
+				loadingVisible={blockingLoadingMessage !== ""}
+				loadingMessage={blockingLoadingMessage}
+				onErrorClose={clearError}
+			/>
 			<header className={headerClassName}>
 				<div className={styles.headerActions}>
 					{embedded ? (
@@ -563,7 +599,7 @@ export default function SnippetEditorForm({
 							type="button"
 							className={styles.closeIconButton}
 							onClick={onClose}
-							disabled={isSaving}
+							disabled={isInteractionBlocked}
 							aria-label="닫기"
 						>
 							×
@@ -577,7 +613,7 @@ export default function SnippetEditorForm({
 								type="button"
 								className={styles.primaryButton}
 								onClick={handleSave}
-								disabled={isSaving || isInitializing || isCreatingTag}
+								disabled={isInteractionBlocked}
 							>
 								{isSaving ? "저장 중" : isEditMode ? "수정 저장" : "등록 저장"}
 							</button>
@@ -585,9 +621,6 @@ export default function SnippetEditorForm({
 					)}
 				</div>
 			</header>
-
-			{message.trim() !== "" ? <p className={styles.messageBar}>{message}</p> : null}
-			{isInitializing ? <p className={styles.loadingText}>에디터 화면을 준비하고 있습니다.</p> : null}
 
 			{!isInitializing ? (
 				<div className={layoutClassName}>
@@ -763,7 +796,7 @@ export default function SnippetEditorForm({
 									type="button"
 									className={`${styles.primaryButton} ${styles.embeddedSaveButton}`}
 									onClick={handleSave}
-									disabled={isSaving || isCreatingTag}
+									disabled={isInteractionBlocked}
 								>
 									{isSaving ? "저장 중" : isEditMode ? "수정 저장" : "등록 저장"}
 								</button>

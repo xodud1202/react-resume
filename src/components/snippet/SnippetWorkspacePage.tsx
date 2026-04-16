@@ -2,6 +2,8 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
+import FeedbackLayer from "@/components/common/FeedbackLayer";
+import useFeedbackLayer from "@/components/common/useFeedbackLayer";
 import {
 	fetchSnippetBootstrap,
 	fetchSnippetDetail,
@@ -43,6 +45,19 @@ interface OverlayPosition {
 	width: number;
 }
 
+interface SnippetBlockingLoadingState {
+	// 초기 진입 로딩 여부입니다.
+	isInitializing: boolean;
+	// 공통 후속 액션 진행 여부입니다.
+	isActionPending: boolean;
+	// 공통 후속 액션 문구입니다.
+	actionPendingMessage: string;
+	// 상세 조회 진행 여부입니다.
+	isDetailLoading: boolean;
+	// 목록 조회 진행 여부입니다.
+	isListLoading: boolean;
+}
+
 const QUICK_FILTER_OPTION_LIST: Array<{ value: SnippetQuickFilter; label: string }> = [
 	{ value: "all", label: "전체" },
 	{ value: "favorite", label: "즐겨찾기" },
@@ -70,6 +85,29 @@ const SNIPPET_PORTAL_THEME_STYLE = {
 	"--danger": "#fda4af",
 } as CSSProperties;
 
+// 스니펫 화면에서 가장 우선순위가 높은 중앙 로딩 문구를 계산합니다.
+function resolveSnippetBlockingLoadingMessage({
+	isInitializing,
+	isActionPending,
+	actionPendingMessage,
+	isDetailLoading,
+	isListLoading,
+}: SnippetBlockingLoadingState): string {
+	if (isInitializing) {
+		return "작업 화면을 준비하고 있습니다.";
+	}
+	if (isActionPending) {
+		return actionPendingMessage.trim() || "작업을 처리하고 있습니다.";
+	}
+	if (isDetailLoading) {
+		return "스니펫 상세를 불러오고 있습니다.";
+	}
+	if (isListLoading) {
+		return "스니펫 목록을 불러오고 있습니다.";
+	}
+	return "";
+}
+
 // 비어 있는 문자열을 목록용 기본 문구로 치환합니다.
 function resolveCompactText(value: string | null, fallbackText: string): string {
 	if (!value || value.trim() === "") {
@@ -91,7 +129,7 @@ function CopyIcon() {
 // 스니펫 메인 작업 화면을 렌더링합니다.
 export default function SnippetWorkspacePage() {
 	const router = useRouter();
-	const feedbackToastTimerRef = useRef<number | null>(null);
+	const { successMessage, isSuccessVisible, errorMessage, showSuccess, showError, clearError } = useFeedbackLayer();
 	const topFilterScrollerRef = useRef<HTMLDivElement | null>(null);
 	const folderSelectRef = useRef<HTMLDivElement | null>(null);
 	const languageSelectRef = useRef<HTMLDivElement | null>(null);
@@ -104,11 +142,10 @@ export default function SnippetWorkspacePage() {
 	const tagSuggestionPanelRef = useRef<HTMLDivElement | null>(null);
 	const [isInitializing, setIsInitializing] = useState(true);
 	const [isListLoading, setIsListLoading] = useState(false);
+	const [isDetailLoading, setIsDetailLoading] = useState(false);
 	const [isActionPending, setIsActionPending] = useState(false);
+	const [actionPendingMessage, setActionPendingMessage] = useState("");
 	const [isCodeHovered, setIsCodeHovered] = useState(false);
-	const [message, setMessage] = useState("");
-	const [feedbackToastMessage, setFeedbackToastMessage] = useState("");
-	const [isFeedbackToastVisible, setIsFeedbackToastVisible] = useState(false);
 	const [bootstrap, setBootstrap] = useState<SnippetBootstrapResponse | null>(null);
 	const [listResponse, setListResponse] = useState<SnippetListResponse | null>(null);
 	const [detail, setDetail] = useState<SnippetDetailResponse | null>(null);
@@ -133,24 +170,39 @@ export default function SnippetWorkspacePage() {
 	const [editingSnippetNo, setEditingSnippetNo] = useState<number | null>(null);
 	const [isEditorModalSaving, setIsEditorModalSaving] = useState(false);
 
-	// 중앙 알림 토스트 타이머를 정리합니다.
-	const clearFeedbackToastTimer = () => {
-		if (feedbackToastTimerRef.current !== null) {
-			window.clearTimeout(feedbackToastTimerRef.current);
-			feedbackToastTimerRef.current = null;
+	// 기존 message 호출을 중앙 오류 박스 제어로 변환합니다.
+	const setMessage = (nextMessage: string) => {
+		if (nextMessage.trim() === "") {
+			clearError();
+			return;
+		}
+		showError(nextMessage);
+	};
+
+	// 성공 안내를 공통 중앙 토스트로 표시합니다.
+	const showFeedbackToast = (toastMessage: string) => {
+		showSuccess(toastMessage);
+	};
+
+	// 공통 후속 액션을 중앙 로딩 레이어와 함께 실행합니다.
+	const runActionWithBlockingLoading = async <T,>(loadingMessage: string, action: () => Promise<T>): Promise<T> => {
+		setIsActionPending(true);
+		setActionPendingMessage(loadingMessage);
+		try {
+			return await action();
+		} finally {
+			setIsActionPending(false);
+			setActionPendingMessage("");
 		}
 	};
 
-	// 화면 중앙 공통 알림 토스트를 잠깐 표시합니다.
-	const showFeedbackToast = (toastMessage: string) => {
-		clearFeedbackToastTimer();
-		setFeedbackToastMessage(toastMessage);
-		setIsFeedbackToastVisible(true);
-		feedbackToastTimerRef.current = window.setTimeout(() => {
-			setIsFeedbackToastVisible(false);
-			feedbackToastTimerRef.current = null;
-		}, 1450);
-	};
+	const blockingLoadingMessage = resolveSnippetBlockingLoadingMessage({
+		isInitializing,
+		isActionPending,
+		actionPendingMessage,
+		isDetailLoading,
+		isListLoading,
+	});
 
 	// 상단 필터 드롭다운과 추천 패널을 한 번에 닫습니다.
 	const closeTopFilterOverlay = () => {
@@ -188,13 +240,6 @@ export default function SnippetWorkspacePage() {
 			return nextListResponse.list.length > 0 ? nextListResponse.list[0].snippetNo : null;
 		});
 	};
-
-	// 페이지 종료 시 토스트 타이머를 정리합니다.
-	useEffect(() => {
-		return () => {
-			clearFeedbackToastTimer();
-		};
-	}, []);
 
 	// 상단 필터 바깥 클릭과 ESC 입력으로 열린 패널을 닫습니다.
 	useEffect(() => {
@@ -328,8 +373,10 @@ export default function SnippetWorkspacePage() {
 			}
 
 			setBootstrap(bootstrapResult.data);
-			setIsInitializing(false);
 			await loadSnippetList();
+			if (!isCancelled) {
+				setIsInitializing(false);
+			}
 		};
 
 		void initializePage();
@@ -350,46 +397,56 @@ export default function SnippetWorkspacePage() {
 				return;
 			}
 
-			const detailResult = await fetchSnippetDetail(selectedSnippetNo);
-			if (isCancelled) {
-				return;
-			}
+			setIsDetailLoading(true);
+			try {
+				const detailResult = await fetchSnippetDetail(selectedSnippetNo);
+				if (isCancelled) {
+					return;
+				}
 
-			if (!detailResult.ok || !detailResult.data) {
-				setMessage(detailResult.message || "스니펫 상세를 불러오지 못했습니다.");
-				setDetail(null);
-				return;
-			}
+				if (!detailResult.ok || !detailResult.data) {
+					setMessage(detailResult.message || "스니펫 상세를 불러오지 못했습니다.");
+					setDetail(null);
+					return;
+				}
 
-			setDetail(detailResult.data);
+				setDetail(detailResult.data);
 
-			const viewedResult = await markSnippetViewed(selectedSnippetNo);
-			if (isCancelled) {
-				return;
-			}
+				const viewedResult = await markSnippetViewed(selectedSnippetNo);
+				if (isCancelled) {
+					return;
+				}
 
-			if (!viewedResult.ok) {
-				setMessage(viewedResult.message || "조회 이력을 갱신하지 못했습니다.");
-				return;
-			}
+				if (!viewedResult.ok) {
+					setMessage(viewedResult.message || "조회 이력을 갱신하지 못했습니다.");
+					return;
+				}
 
-			await reloadBootstrap();
-			if (isCancelled) {
-				return;
-			}
+				const bootstrapReloaded = await reloadBootstrap();
+				if (isCancelled || !bootstrapReloaded) {
+					return;
+				}
 
-			await loadSnippetList();
-			if (isCancelled) {
-				return;
-			}
+				const listReloaded = await loadSnippetList();
+				if (isCancelled || !listReloaded) {
+					return;
+				}
 
-			const refreshedDetailResult = await fetchSnippetDetail(selectedSnippetNo);
-			if (isCancelled) {
-				return;
-			}
+				const refreshedDetailResult = await fetchSnippetDetail(selectedSnippetNo);
+				if (isCancelled) {
+					return;
+				}
 
-			if (refreshedDetailResult.ok && refreshedDetailResult.data) {
+				if (!refreshedDetailResult.ok || !refreshedDetailResult.data) {
+					setMessage(refreshedDetailResult.message || "스니펫 상세를 다시 불러오지 못했습니다.");
+					return;
+				}
+
 				setDetail(refreshedDetailResult.data);
+			} finally {
+				if (!isCancelled) {
+					setIsDetailLoading(false);
+				}
 			}
 		};
 
@@ -401,7 +458,7 @@ export default function SnippetWorkspacePage() {
 	}, [selectedSnippetNo]);
 
 	// 현재 필터 기준으로 스니펫 목록을 다시 조회합니다.
-	const loadSnippetList = async (options: SnippetListReloadOptions = {}) => {
+	const loadSnippetList = async (options: SnippetListReloadOptions = {}): Promise<boolean> => {
 		const resolvedQ = typeof options.q === "string" ? options.q : searchKeyword;
 		const resolvedFolderNo = Object.prototype.hasOwnProperty.call(options, "folderNo") ? options.folderNo ?? null : selectedFolderNo;
 		const resolvedTagNo = Object.prototype.hasOwnProperty.call(options, "tagNo") ? options.tagNo ?? null : selectedTagNo;
@@ -411,53 +468,58 @@ export default function SnippetWorkspacePage() {
 		const resolvedQuickFilter = typeof options.quickFilter === "string" ? options.quickFilter : selectedQuickFilter;
 
 		setIsListLoading(true);
-		const result = await fetchSnippetList({
-			q: resolvedQ,
-			folderNo: resolvedFolderNo,
-			tagNo: resolvedTagNo,
-			languageCd: resolvedLanguageCd,
-			includeBodyYn: resolvedIncludeBodyYn,
-			sortBy: resolvedSortBy,
-			quickFilter: resolvedQuickFilter,
-			page: 1,
-			size: 40,
-		});
-
-		if (!result.ok || !result.data) {
-			setMessage(result.message || "스니펫 목록 조회에 실패했습니다.");
-			setListResponse({
-				list: [],
-				totalCount: 0,
+		try {
+			const result = await fetchSnippetList({
+				q: resolvedQ,
+				folderNo: resolvedFolderNo,
+				tagNo: resolvedTagNo,
+				languageCd: resolvedLanguageCd,
+				includeBodyYn: resolvedIncludeBodyYn,
+				sortBy: resolvedSortBy,
+				quickFilter: resolvedQuickFilter,
 				page: 1,
 				size: 40,
 			});
-			setSelectedSnippetNo(null);
-			setIsListLoading(false);
-			return;
-		}
 
-		applyListResponse(result.data);
-		setIsListLoading(false);
+			if (!result.ok || !result.data) {
+				setMessage(result.message || "스니펫 목록 조회에 실패했습니다.");
+				setListResponse({
+					list: [],
+					totalCount: 0,
+					page: 1,
+					size: 40,
+				});
+				setSelectedSnippetNo(null);
+				return false;
+			}
+
+			applyListResponse(result.data);
+			return true;
+		} finally {
+			setIsListLoading(false);
+		}
 	};
 
 	// bootstrap 데이터를 다시 읽어 보조 목록을 갱신합니다.
-	const reloadBootstrap = async () => {
+	const reloadBootstrap = async (): Promise<boolean> => {
 		const result = await fetchSnippetBootstrap();
 		if (!result.ok || !result.data) {
 			setMessage(result.message || "보조 데이터를 다시 불러오지 못했습니다.");
-			return;
+			return false;
 		}
 		setBootstrap(result.data);
+		return true;
 	};
 
 	// 현재 선택된 스니펫 상세를 다시 읽어 상세 패널을 최신 상태로 맞춥니다.
-	const reloadDetail = async (snippetNo: number) => {
+	const reloadDetail = async (snippetNo: number): Promise<boolean> => {
 		const result = await fetchSnippetDetail(snippetNo);
 		if (!result.ok || !result.data) {
 			setMessage(result.message || "스니펫 상세를 다시 불러오지 못했습니다.");
-			return;
+			return false;
 		}
 		setDetail(result.data);
+		return true;
 	};
 
 	// 폴더 필터를 지정한 값으로 변경합니다.
@@ -570,61 +632,97 @@ export default function SnippetWorkspacePage() {
 		setEditorModalOpen(false);
 		setEditingSnippetNo(null);
 		setIsEditorModalSaving(false);
-		setMessage("");
-		showFeedbackToast(response.message);
-		await reloadBootstrap();
-		await loadSnippetList();
-		setSelectedSnippetNo(response.snippetNo);
-		await reloadDetail(response.snippetNo);
+		await runActionWithBlockingLoading("저장 결과를 반영하고 있습니다.", async () => {
+			const bootstrapReloaded = await reloadBootstrap();
+			if (!bootstrapReloaded) {
+				return;
+			}
+
+			const listReloaded = await loadSnippetList();
+			if (!listReloaded) {
+				return;
+			}
+
+			setSelectedSnippetNo(response.snippetNo);
+			const detailReloaded = await reloadDetail(response.snippetNo);
+			if (!detailReloaded) {
+				return;
+			}
+
+			showFeedbackToast(response.message);
+		});
 	};
 
 	// 코드 복사를 처리하고 상세/목록을 최신 상태로 갱신합니다.
 	const handleCopySnippet = async (snippet: SnippetDetailResponse) => {
-		try {
-			await navigator.clipboard.writeText(snippet.snippetBody);
+		await runActionWithBlockingLoading("스니펫을 복사하고 있습니다.", async () => {
+			try {
+				await navigator.clipboard.writeText(snippet.snippetBody);
 
-			const copiedResult = await markSnippetCopied(snippet.snippetNo);
-			if (!copiedResult.ok) {
-				setMessage(copiedResult.message || "복사 이력을 갱신하지 못했습니다.");
-				return;
+				const copiedResult = await markSnippetCopied(snippet.snippetNo);
+				if (!copiedResult.ok) {
+					setMessage(copiedResult.message || "복사 이력을 갱신하지 못했습니다.");
+					return;
+				}
+
+				const bootstrapReloaded = await reloadBootstrap();
+				if (!bootstrapReloaded) {
+					return;
+				}
+
+				const listReloaded = await loadSnippetList();
+				if (!listReloaded) {
+					return;
+				}
+
+				const detailReloaded = await reloadDetail(snippet.snippetNo);
+				if (!detailReloaded) {
+					return;
+				}
+
+				setSelectedSnippetNo(snippet.snippetNo);
+				showFeedbackToast("복사되었습니다.");
+			} catch {
+				setMessage("클립보드 복사에 실패했습니다.");
 			}
-
-			await reloadBootstrap();
-			await loadSnippetList();
-			await reloadDetail(snippet.snippetNo);
-			setSelectedSnippetNo(snippet.snippetNo);
-			setMessage("");
-			showFeedbackToast("복사되었습니다.");
-		} catch {
-			setMessage("클립보드 복사에 실패했습니다.");
-		}
+		});
 	};
 
 	// 선택된 스니펫의 즐겨찾기 여부를 토글합니다.
 	const handleFavoriteToggle = async (snippet: SnippetSummary | SnippetDetailResponse) => {
-		setIsActionPending(true);
-		const nextFavoriteYn = snippet.favoriteYn === "Y" ? "N" : "Y";
+		await runActionWithBlockingLoading("즐겨찾기 상태를 변경하고 있습니다.", async () => {
+			const nextFavoriteYn = snippet.favoriteYn === "Y" ? "N" : "Y";
 
-		const result = await requestSnippetClientApi<{ message: string }>(`/api/snippet/snippets/${snippet.snippetNo}/favorite`, {
-			method: "PATCH",
-			body: {
-				favoriteYn: nextFavoriteYn,
-			},
+			const result = await requestSnippetClientApi<{ message: string }>(`/api/snippet/snippets/${snippet.snippetNo}/favorite`, {
+				method: "PATCH",
+				body: {
+					favoriteYn: nextFavoriteYn,
+				},
+			});
+
+			if (!result.ok) {
+				setMessage(result.message || "즐겨찾기 상태를 변경하지 못했습니다.");
+				return;
+			}
+
+			const bootstrapReloaded = await reloadBootstrap();
+			if (!bootstrapReloaded) {
+				return;
+			}
+
+			const listReloaded = await loadSnippetList();
+			if (!listReloaded) {
+				return;
+			}
+
+			const detailReloaded = await reloadDetail(snippet.snippetNo);
+			if (!detailReloaded) {
+				return;
+			}
+
+			setSelectedSnippetNo(snippet.snippetNo);
+			showFeedbackToast("즐겨찾기 상태를 변경했습니다.");
 		});
-
-		if (!result.ok) {
-			setMessage(result.message || "즐겨찾기 상태를 변경하지 못했습니다.");
-			setIsActionPending(false);
-			return;
-		}
-
-		setMessage("");
-		showFeedbackToast("즐겨찾기 상태를 변경했습니다.");
-		await reloadBootstrap();
-		await loadSnippetList();
-		await reloadDetail(snippet.snippetNo);
-		setSelectedSnippetNo(snippet.snippetNo);
-		setIsActionPending(false);
 	};
 
 	// 스니펫 삭제를 처리합니다.
@@ -633,23 +731,29 @@ export default function SnippetWorkspacePage() {
 			return;
 		}
 
-		setIsActionPending(true);
-		const result = await requestSnippetClientApi<{ message: string }>(`/api/snippet/snippets/${snippetNo}`, {
-			method: "DELETE",
+		await runActionWithBlockingLoading("스니펫을 삭제하고 있습니다.", async () => {
+			const result = await requestSnippetClientApi<{ message: string }>(`/api/snippet/snippets/${snippetNo}`, {
+				method: "DELETE",
+			});
+
+			if (!result.ok) {
+				setMessage(result.message || "스니펫을 삭제하지 못했습니다.");
+				return;
+			}
+
+			setDetail(null);
+			const bootstrapReloaded = await reloadBootstrap();
+			if (!bootstrapReloaded) {
+				return;
+			}
+
+			const listReloaded = await loadSnippetList();
+			if (!listReloaded) {
+				return;
+			}
+
+			showFeedbackToast("스니펫을 삭제했습니다.");
 		});
-
-		if (!result.ok) {
-			setMessage(result.message || "스니펫을 삭제하지 못했습니다.");
-			setIsActionPending(false);
-			return;
-		}
-
-		setMessage("");
-		showFeedbackToast("스니펫을 삭제했습니다.");
-		setDetail(null);
-		await reloadBootstrap();
-		await loadSnippetList();
-		setIsActionPending(false);
 	};
 
 	// 폴더를 추가합니다.
@@ -660,25 +764,27 @@ export default function SnippetWorkspacePage() {
 			return;
 		}
 
-		setIsActionPending(true);
-		const result = await requestSnippetClientApi<SnippetFolder>("/api/snippet/folders", {
-			method: "POST",
-			body: {
-				folderNm: folderNm.trim(),
-				colorHex: "#D96C47",
-			},
+		await runActionWithBlockingLoading("폴더를 추가하고 있습니다.", async () => {
+			const result = await requestSnippetClientApi<SnippetFolder>("/api/snippet/folders", {
+				method: "POST",
+				body: {
+					folderNm: folderNm.trim(),
+					colorHex: "#D96C47",
+				},
+			});
+
+			if (!result.ok) {
+				setMessage(result.message || "폴더를 추가하지 못했습니다.");
+				return;
+			}
+
+			const bootstrapReloaded = await reloadBootstrap();
+			if (!bootstrapReloaded) {
+				return;
+			}
+
+			showFeedbackToast("폴더를 추가했습니다.");
 		});
-
-		if (!result.ok) {
-			setMessage(result.message || "폴더를 추가하지 못했습니다.");
-			setIsActionPending(false);
-			return;
-		}
-
-		setMessage("");
-		showFeedbackToast("폴더를 추가했습니다.");
-		await reloadBootstrap();
-		setIsActionPending(false);
 	};
 
 	// 언어를 추가합니다.
@@ -689,24 +795,26 @@ export default function SnippetWorkspacePage() {
 			return;
 		}
 
-		setIsActionPending(true);
-		const result = await requestSnippetClientApi<SnippetLanguage>("/api/snippet/languages", {
-			method: "POST",
-			body: {
-				languageNm: languageNm.trim(),
-			},
+		await runActionWithBlockingLoading("언어를 추가하고 있습니다.", async () => {
+			const result = await requestSnippetClientApi<SnippetLanguage>("/api/snippet/languages", {
+				method: "POST",
+				body: {
+					languageNm: languageNm.trim(),
+				},
+			});
+
+			if (!result.ok) {
+				setMessage(result.message || "언어를 추가하지 못했습니다.");
+				return;
+			}
+
+			const bootstrapReloaded = await reloadBootstrap();
+			if (!bootstrapReloaded) {
+				return;
+			}
+
+			showFeedbackToast("언어를 추가했습니다.");
 		});
-
-		if (!result.ok) {
-			setMessage(result.message || "언어를 추가하지 못했습니다.");
-			setIsActionPending(false);
-			return;
-		}
-
-		setMessage("");
-		showFeedbackToast("언어를 추가했습니다.");
-		await reloadBootstrap();
-		setIsActionPending(false);
 	};
 
 	// 태그를 추가합니다.
@@ -717,25 +825,27 @@ export default function SnippetWorkspacePage() {
 			return;
 		}
 
-		setIsActionPending(true);
-		const result = await requestSnippetClientApi<SnippetTag>("/api/snippet/tags", {
-			method: "POST",
-			body: {
-				tagNm: tagNm.trim(),
-				colorHex: "#3B7EA1",
-			},
+		await runActionWithBlockingLoading("태그를 추가하고 있습니다.", async () => {
+			const result = await requestSnippetClientApi<SnippetTag>("/api/snippet/tags", {
+				method: "POST",
+				body: {
+					tagNm: tagNm.trim(),
+					colorHex: "#3B7EA1",
+				},
+			});
+
+			if (!result.ok) {
+				setMessage(result.message || "태그를 추가하지 못했습니다.");
+				return;
+			}
+
+			const bootstrapReloaded = await reloadBootstrap();
+			if (!bootstrapReloaded) {
+				return;
+			}
+
+			showFeedbackToast("태그를 추가했습니다.");
 		});
-
-		if (!result.ok) {
-			setMessage(result.message || "태그를 추가하지 못했습니다.");
-			setIsActionPending(false);
-			return;
-		}
-
-		setMessage("");
-		showFeedbackToast("태그를 추가했습니다.");
-		await reloadBootstrap();
-		setIsActionPending(false);
 	};
 
 	// 폴더 삭제를 처리합니다.
@@ -745,26 +855,33 @@ export default function SnippetWorkspacePage() {
 			return;
 		}
 
-		setIsActionPending(true);
-		const result = await requestSnippetClientApi<{ message: string }>(`/api/snippet/folders/${folder.folderNo}`, {
-			method: "DELETE",
+		await runActionWithBlockingLoading("폴더를 삭제하고 있습니다.", async () => {
+			const result = await requestSnippetClientApi<{ message: string }>(`/api/snippet/folders/${folder.folderNo}`, {
+				method: "DELETE",
+			});
+
+			if (!result.ok) {
+				setMessage(result.message || "폴더를 삭제하지 못했습니다.");
+				return;
+			}
+
+			const nextFolderNo = selectedFolderNo === folder.folderNo ? null : selectedFolderNo;
+			if (selectedFolderNo === folder.folderNo) {
+				setSelectedFolderNo(null);
+			}
+
+			const bootstrapReloaded = await reloadBootstrap();
+			if (!bootstrapReloaded) {
+				return;
+			}
+
+			const listReloaded = await loadSnippetList({ folderNo: nextFolderNo });
+			if (!listReloaded) {
+				return;
+			}
+
+			showFeedbackToast("폴더를 삭제했습니다.");
 		});
-
-		if (!result.ok) {
-			setMessage(result.message || "폴더를 삭제하지 못했습니다.");
-			setIsActionPending(false);
-			return;
-		}
-
-		if (selectedFolderNo === folder.folderNo) {
-			setSelectedFolderNo(null);
-		}
-
-		setMessage("");
-		showFeedbackToast("폴더를 삭제했습니다.");
-		await reloadBootstrap();
-		await loadSnippetList({ folderNo: selectedFolderNo === folder.folderNo ? null : selectedFolderNo });
-		setIsActionPending(false);
 	};
 
 	// 언어 삭제를 처리합니다.
@@ -774,27 +891,33 @@ export default function SnippetWorkspacePage() {
 			return;
 		}
 
-		setIsActionPending(true);
-		const result = await requestSnippetClientApi<{ message: string }>(`/api/snippet/languages/${language.languageCd}`, {
-			method: "DELETE",
+		await runActionWithBlockingLoading("언어를 삭제하고 있습니다.", async () => {
+			const result = await requestSnippetClientApi<{ message: string }>(`/api/snippet/languages/${language.languageCd}`, {
+				method: "DELETE",
+			});
+
+			if (!result.ok) {
+				setMessage(result.message || "언어를 삭제하지 못했습니다.");
+				return;
+			}
+
+			const nextLanguageCd = selectedLanguageCd === language.languageCd ? "" : selectedLanguageCd;
+			if (selectedLanguageCd === language.languageCd) {
+				setSelectedLanguageCd("");
+			}
+
+			const bootstrapReloaded = await reloadBootstrap();
+			if (!bootstrapReloaded) {
+				return;
+			}
+
+			const listReloaded = await loadSnippetList({ languageCd: nextLanguageCd });
+			if (!listReloaded) {
+				return;
+			}
+
+			showFeedbackToast("언어를 삭제했습니다.");
 		});
-
-		if (!result.ok) {
-			setMessage(result.message || "언어를 삭제하지 못했습니다.");
-			setIsActionPending(false);
-			return;
-		}
-
-		const nextLanguageCd = selectedLanguageCd === language.languageCd ? "" : selectedLanguageCd;
-		if (selectedLanguageCd === language.languageCd) {
-			setSelectedLanguageCd("");
-		}
-
-		setMessage("");
-		showFeedbackToast("언어를 삭제했습니다.");
-		await reloadBootstrap();
-		await loadSnippetList({ languageCd: nextLanguageCd });
-		setIsActionPending(false);
 	};
 
 	// 태그 추천 목록에서 선택한 태그를 필터에 적용합니다.
@@ -833,9 +956,10 @@ export default function SnippetWorkspacePage() {
 
 	// 스니펫 로그아웃을 처리합니다.
 	const handleLogout = async () => {
-		setIsActionPending(true);
-		await logoutSnippet();
-		await router.replace("/snippet/login");
+		await runActionWithBlockingLoading("로그아웃하고 있습니다.", async () => {
+			await logoutSnippet();
+			await router.replace("/snippet/login");
+		});
 	};
 
 	const folderList = bootstrap?.folderList ?? [];
@@ -975,10 +1099,14 @@ export default function SnippetWorkspacePage() {
 			</Head>
 
 			<div className={styles.pageShell}>
-				{message.trim() !== "" ? <p className={styles.messageBar}>{message}</p> : null}
-				<div className={`${styles.feedbackToast} ${isFeedbackToastVisible ? styles.feedbackToastVisible : ""}`} aria-live="polite">
-					{feedbackToastMessage}
-				</div>
+				<FeedbackLayer
+					successMessage={successMessage}
+					isSuccessVisible={isSuccessVisible}
+					errorMessage={errorMessage}
+					loadingVisible={blockingLoadingMessage !== ""}
+					loadingMessage={blockingLoadingMessage}
+					onErrorClose={clearError}
+				/>
 				{editorModalOpen && bootstrap ? (
 					<div className={styles.editorModalOverlay} onClick={handleCloseEditorModal}>
 						<div
@@ -1000,7 +1128,6 @@ export default function SnippetWorkspacePage() {
 						</div>
 					</div>
 				) : null}
-				{isInitializing ? <p className={styles.loadingText}>작업 화면을 준비하고 있습니다.</p> : null}
 
 				{!isInitializing && bootstrap ? (
 					<div className={styles.workspaceShell}>

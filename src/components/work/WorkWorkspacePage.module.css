@@ -192,7 +192,8 @@
 .inlineDangerButton,
 .fileDeleteButton,
 .comboActionButton,
-.modalCloseButton {
+.modalCloseButton,
+.modalCloseIconButton {
 	border: 1px solid var(--work-border);
 	border-radius: 12px;
 	cursor: pointer;
@@ -223,6 +224,7 @@
 .inlineActionButton,
 .comboActionButton,
 .modalCloseButton,
+.modalCloseIconButton,
 .fileDeleteButton {
 	background: rgba(255, 255, 255, 0.03);
 	color: var(--work-ink);
@@ -255,6 +257,7 @@
 .fileDeleteButton:hover,
 .comboActionButton:hover,
 .modalCloseButton:hover,
+.modalCloseIconButton:hover,
 .workCard:hover,
 .statusComboButton:hover,
 .filePreviewButton:hover,
@@ -340,6 +343,12 @@
 	padding: 0.2rem 0.1rem;
 	color: var(--work-ink);
 	line-height: 1.35;
+}
+
+.statusOptionAllItem {
+	margin-bottom: 0.2rem;
+	padding-bottom: 0.65rem;
+	border-bottom: 1px solid var(--work-border);
 }
 
 .statusOptionItem input {
@@ -485,6 +494,10 @@
 	gap: 0.75rem;
 }
 
+.metaRowWide {
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .metaRowCompact {
 	grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -517,6 +530,19 @@
 	font-size: 0.95rem;
 	line-height: 1.4;
 	word-break: break-word;
+}
+
+.modalCloseIconButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 2.5rem;
+	height: 2.5rem;
+	padding: 0;
+	border-radius: 999px;
+	font-size: 1.15rem;
+	font-weight: 700;
+	line-height: 1;
 }
 
 .metaDateInputWrapper {
@@ -685,6 +711,7 @@
 
 .replyContent {
 	color: var(--work-ink);
+	margin: 15px 0;
 }
 
 .modalOverlay,
@@ -724,6 +751,7 @@
 }
 
 @media (max-width: 1320px) {
+	.metaRowWide,
 	.metaRowCompact {
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 	}
@@ -744,6 +772,11 @@
 	}
 
 	.metaRow {
+		grid-template-columns: 1fr;
+	}
+
+	.metaRowWide,
+	.metaRowCompact {
 		grid-template-columns: 1fr;
 	}
 }

@@ -32,6 +32,8 @@ interface WorkQuillImageUploadOptions {
 	onChange: (value: string) => void;
 	// 에디터 DOM id입니다.
 	editorId?: string;
+	// 업로드 오류를 외부 피드백 레이어로 전달합니다.
+	onError?: (message: string) => void;
 }
 
 interface WorkQuillImageUploadResult {
@@ -43,6 +45,8 @@ interface WorkQuillImageUploadResult {
 	quillFormats: string[];
 	// 에디터 값 변경 핸들러입니다.
 	handleEditorChange: (value: string) => void;
+	// 이미지 업로드 진행 여부입니다.
+	isUploadingInlineImage: boolean;
 }
 
 // 업무 댓글 Quill 에디터 이미지 업로드/붙여넣기 처리를 공통화합니다.
@@ -51,6 +55,7 @@ const useWorkQuillImageUpload = ({
 	formats,
 	onChange,
 	editorId,
+	onError,
 }: WorkQuillImageUploadOptions): WorkQuillImageUploadResult => {
 	const quillRef = useRef<ReactQuill | null>(null);
 	const [isUploadingInlineImage, setIsUploadingInlineImage] = useState(false);
@@ -136,6 +141,9 @@ const useWorkQuillImageUpload = ({
 
 	// 툴바 이미지 버튼 클릭 시 파일 선택 업로드를 처리합니다.
 	const handleImageUpload = useCallback(() => {
+		if (isUploadingInlineImage) {
+			return;
+		}
 		const inputElement = document.createElement("input");
 		inputElement.type = "file";
 		inputElement.accept = "image/*";
@@ -144,6 +152,7 @@ const useWorkQuillImageUpload = ({
 				return;
 			}
 			const file = inputElement.files[0];
+			setIsUploadingInlineImage(true);
 			try {
 				const imageUrl = await uploadEditorImage(file);
 				const quill = await resolveEditorWithRetry();
@@ -156,11 +165,13 @@ const useWorkQuillImageUpload = ({
 				quill.setSelection(insertIndex + 1, 0);
 			} catch (error) {
 				console.error("업무 댓글 이미지 업로드에 실패했습니다.", error);
-				alert(error instanceof Error ? error.message : "이미지 업로드에 실패했습니다.");
+				onError?.(error instanceof Error ? error.message : "이미지 업로드에 실패했습니다.");
+			} finally {
+				setIsUploadingInlineImage(false);
 			}
 		};
 		inputElement.click();
-	}, [resolveEditorWithRetry, uploadEditorImage]);
+	}, [isUploadingInlineImage, onError, resolveEditorWithRetry, uploadEditorImage]);
 
 	// 붙여넣은 base64 이미지를 업로드 URL로 치환합니다.
 	const replaceInlineImage = useCallback(async (value: string) => {
@@ -189,10 +200,11 @@ const useWorkQuillImageUpload = ({
 			}
 		} catch (error) {
 			console.error("업무 댓글 붙여넣기 이미지 업로드에 실패했습니다.", error);
+			onError?.(error instanceof Error ? error.message : "이미지 업로드에 실패했습니다.");
 		} finally {
 			setIsUploadingInlineImage(false);
 		}
-	}, [convertDataUrlToFile, isUploadingInlineImage, onChange, uploadEditorImage]);
+	}, [convertDataUrlToFile, isUploadingInlineImage, onChange, onError, uploadEditorImage]);
 
 	// Quill 툴바 이미지 핸들러를 연결합니다.
 	useEffect(() => {
@@ -227,6 +239,7 @@ const useWorkQuillImageUpload = ({
 		quillModules,
 		quillFormats: formats,
 		handleEditorChange,
+		isUploadingInlineImage,
 	};
 };
 

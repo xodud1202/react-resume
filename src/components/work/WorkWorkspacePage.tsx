@@ -1,6 +1,8 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
+import FeedbackLayer from "@/components/common/FeedbackLayer";
+import useFeedbackLayer from "@/components/common/useFeedbackLayer";
 import AdminDateInput from "@/components/work/AdminDateInput";
 import LazyQuillEditor from "@/components/work/LazyQuillEditor";
 import WorkReadonlyHtml from "@/components/work/WorkReadonlyHtml";
@@ -323,10 +325,17 @@ function resolveStatusName(workStatCd: string, workStatList: WorkCommonCode[]): 
 	return workStatList.find((codeItem) => codeItem.cd === workStatCd)?.cdNm || workStatCd || "상태 미지정";
 }
 
+// 사용 가능한 전체 상태 코드 목록을 계산합니다.
+function resolveAllStatusCodeList(workStatList: WorkCommonCode[]): string[] {
+	return workStatList
+		.map((codeItem) => trimText(codeItem.cd))
+		.filter((codeItem, index, codeList) => codeItem !== "" && codeList.indexOf(codeItem) === index);
+}
+
 // 상태 필터 버튼 문구를 계산합니다.
 function resolveStatusFilterButtonLabel(selectedCodeList: string[], workStatList: WorkCommonCode[]): string {
 	if (selectedCodeList.length < 1) {
-		return "상태 전체";
+		return "상태 선택 없음";
 	}
 	if (selectedCodeList.length === workStatList.length) {
 		return "상태 전체";
@@ -352,6 +361,90 @@ function triggerBrowserFileDownload(blob: Blob, fileName: string) {
 	window.URL.revokeObjectURL(blobUrl);
 }
 
+interface WorkBlockingLoadingState {
+	// 초기 진입 로딩 여부입니다.
+	isInitializing: boolean;
+	// 공통 액션 대기 여부입니다.
+	isActionPending: boolean;
+	// 공통 액션 대기 문구입니다.
+	actionPendingMessage: string;
+	// 상세 즉시 저장 여부입니다.
+	isDetailSaving: boolean;
+	// 댓글 저장/수정/삭제 여부입니다.
+	isReplySaving: boolean;
+	// 댓글 저장 관련 문구입니다.
+	replySavingMessage: string;
+	// 수기 등록 저장 여부입니다.
+	isManualSaving: boolean;
+	// SR 가져오기 저장 여부입니다.
+	isImportSaving: boolean;
+	// 프로젝트 목록 로딩 여부입니다.
+	isImportProjectLoading: boolean;
+	// 상태 섹션 추가 조회 여부입니다.
+	hasSectionLoading: boolean;
+	// 상세 조회 여부입니다.
+	isDetailLoading: boolean;
+	// 목록 조회 여부입니다.
+	isListLoading: boolean;
+	// 신규 댓글 이미지 업로드 여부입니다.
+	isReplyImageUploading: boolean;
+	// 수정 댓글 이미지 업로드 여부입니다.
+	isEditingReplyImageUploading: boolean;
+}
+
+// 업무 화면에서 가장 우선순위가 높은 중앙 로딩 문구를 계산합니다.
+function resolveWorkBlockingLoadingMessage({
+	isInitializing,
+	isActionPending,
+	actionPendingMessage,
+	isDetailSaving,
+	isReplySaving,
+	replySavingMessage,
+	isManualSaving,
+	isImportSaving,
+	isImportProjectLoading,
+	hasSectionLoading,
+	isDetailLoading,
+	isListLoading,
+	isReplyImageUploading,
+	isEditingReplyImageUploading,
+}: WorkBlockingLoadingState): string {
+	if (isInitializing) {
+		return "업무 화면을 준비하고 있습니다.";
+	}
+	if (isManualSaving) {
+		return "업무를 등록하고 있습니다.";
+	}
+	if (isImportSaving) {
+		return "SR 업무를 가져오고 있습니다.";
+	}
+	if (isReplySaving) {
+		return trimText(replySavingMessage) || "댓글을 처리하고 있습니다.";
+	}
+	if (isDetailSaving) {
+		return "업무를 저장하고 있습니다.";
+	}
+	if (isActionPending) {
+		return trimText(actionPendingMessage) || "작업을 처리하고 있습니다.";
+	}
+	if (isImportProjectLoading) {
+		return "프로젝트 목록을 불러오고 있습니다.";
+	}
+	if (hasSectionLoading) {
+		return "업무 목록을 더 불러오고 있습니다.";
+	}
+	if (isDetailLoading) {
+		return "업무 상세를 불러오고 있습니다.";
+	}
+	if (isListLoading) {
+		return "업무 목록을 불러오고 있습니다.";
+	}
+	if (isReplyImageUploading || isEditingReplyImageUploading) {
+		return "이미지를 업로드하고 있습니다.";
+	}
+	return "";
+}
+
 // 공통 모달 셸을 렌더링합니다.
 function WorkModalShell({
 	title,
@@ -370,8 +463,8 @@ function WorkModalShell({
 			<div className={styles.modalDialog} onClick={(event) => event.stopPropagation()}>
 				<div className={styles.modalHeader}>
 					<h2 className={styles.modalTitle}>{title}</h2>
-					<button type="button" className={styles.modalCloseButton} onClick={onClose}>
-						닫기
+					<button type="button" className={styles.modalCloseIconButton} onClick={onClose} aria-label="닫기">
+						×
 					</button>
 				</div>
 				<div className={styles.modalBody}>{children}</div>
@@ -383,19 +476,19 @@ function WorkModalShell({
 // 업무관리 메인 작업 화면을 렌더링합니다.
 export default function WorkWorkspacePage() {
 	const router = useRouter();
-	const feedbackToastTimerRef = useRef<number | null>(null);
 	const statusFilterRef = useRef<HTMLDivElement | null>(null);
+	const statusFilterAllInputRef = useRef<HTMLInputElement | null>(null);
 	const replyFileInputRef = useRef<HTMLInputElement | null>(null);
 	const editingReplyFileInputRef = useRef<HTMLInputElement | null>(null);
+	const { successMessage, isSuccessVisible, errorMessage, showSuccess, showError, clearError } = useFeedbackLayer();
 	const [isInitializing, setIsInitializing] = useState(true);
 	const [isListLoading, setIsListLoading] = useState(false);
 	const [isDetailLoading, setIsDetailLoading] = useState(false);
 	const [isDetailSaving, setIsDetailSaving] = useState(false);
 	const [isReplySaving, setIsReplySaving] = useState(false);
 	const [isActionPending, setIsActionPending] = useState(false);
-	const [message, setMessage] = useState("");
-	const [feedbackToastMessage, setFeedbackToastMessage] = useState("");
-	const [isFeedbackToastVisible, setIsFeedbackToastVisible] = useState(false);
+	const [actionPendingMessage, setActionPendingMessage] = useState("");
+	const [replySavingMessage, setReplySavingMessage] = useState("");
 	const [bootstrap, setBootstrap] = useState<WorkBootstrapResponse | null>(null);
 	const [projectList, setProjectList] = useState<WorkProjectOption[]>([]);
 	const [listResponse, setListResponse] = useState<WorkListResponse | null>(null);
@@ -424,11 +517,26 @@ export default function WorkWorkspacePage() {
 	const [editingReplyFiles, setEditingReplyFiles] = useState<File[]>([]);
 	const [editingDeleteReplyFileSeqList, setEditingDeleteReplyFileSeqList] = useState<number[]>([]);
 
+	// 기존 message 호출을 중앙 오류 박스 제어로 변환합니다.
+	const setMessage = (nextMessage: string) => {
+		if (trimText(nextMessage) === "") {
+			clearError();
+			return;
+		}
+		showError(nextMessage);
+	};
+
+	// 기존 성공 토스트 호출을 공통 성공 토스트로 변환합니다.
+	const showFeedbackToast = (toastMessage: string) => {
+		showSuccess(toastMessage);
+	};
+
 	const replyQuill = useWorkQuillImageUpload({
 		toolbarOptions: REPLY_EDITOR_TOOLBAR_OPTIONS,
 		formats: REPLY_EDITOR_FORMATS,
 		onChange: setReplyComment,
 		editorId: "work-reply-editor",
+		onError: setMessage,
 	});
 	const editingReplyEditorId = useMemo(
 		() => `work-reply-editor-${editingReplySeq ?? "new"}`,
@@ -439,12 +547,16 @@ export default function WorkWorkspacePage() {
 		formats: REPLY_EDITOR_FORMATS,
 		onChange: setEditingReplyComment,
 		editorId: editingReplyEditorId,
+		onError: setMessage,
 	});
-	const workStatList = bootstrap?.workStatList ?? [];
-	const workPriorList = bootstrap?.workPriorList ?? [];
+	const workStatList = useMemo(() => bootstrap?.workStatList ?? [], [bootstrap]);
+	const allStatusCodeList = useMemo(() => resolveAllStatusCodeList(workStatList), [workStatList]);
+	const workPriorList = useMemo(() => bootstrap?.workPriorList ?? [], [bootstrap]);
 	const companyList = useMemo(() => bootstrap?.companyList ?? [], [bootstrap]);
 	const currentUser = bootstrap?.currentUser ?? null;
 	const selectedDetail = detailResponse?.detail ?? null;
+	const isAllStatusCodeSelected = allStatusCodeList.length > 0 && selectedStatusCodeList.length === allStatusCodeList.length;
+	const hasPartialStatusCodeSelection = selectedStatusCodeList.length > 0 && !isAllStatusCodeSelected;
 	const statusFilterButtonLabel = resolveStatusFilterButtonLabel(selectedStatusCodeList, workStatList);
 	const visibleStatusSectionList = useMemo(
 		() => (listResponse?.statusSectionList ?? []).filter((sectionItem) => sectionItem.totalCount > 0),
@@ -454,25 +566,26 @@ export default function WorkWorkspacePage() {
 	const [importProjectList, setImportProjectList] = useState<WorkProjectOption[]>([]);
 	const [isImportProjectLoading, setIsImportProjectLoading] = useState(false);
 	const importProjectPlaceholderText = resolveImportProjectPlaceholderText(importForm, isImportProjectLoading);
-
-	// 중앙 토스트 타이머를 정리합니다.
-	const clearFeedbackToastTimer = () => {
-		if (feedbackToastTimerRef.current !== null) {
-			window.clearTimeout(feedbackToastTimerRef.current);
-			feedbackToastTimerRef.current = null;
-		}
-	};
-
-	// 공통 성공 토스트를 잠깐 노출합니다.
-	const showFeedbackToast = (toastMessage: string) => {
-		clearFeedbackToastTimer();
-		setFeedbackToastMessage(toastMessage);
-		setIsFeedbackToastVisible(true);
-		feedbackToastTimerRef.current = window.setTimeout(() => {
-			setIsFeedbackToastVisible(false);
-			feedbackToastTimerRef.current = null;
-		}, 1400);
-	};
+	const hasSectionLoading = useMemo(
+		() => Object.values(sectionLoadingMap).some((loadingFlag) => loadingFlag),
+		[sectionLoadingMap],
+	);
+	const blockingLoadingMessage = resolveWorkBlockingLoadingMessage({
+		isInitializing,
+		isActionPending,
+		actionPendingMessage,
+		isDetailSaving,
+		isReplySaving,
+		replySavingMessage,
+		isManualSaving,
+		isImportSaving,
+		isImportProjectLoading,
+		hasSectionLoading,
+		isDetailLoading,
+		isListLoading,
+		isReplyImageUploading: replyQuill.isUploadingInlineImage,
+		isEditingReplyImageUploading: editingReplyQuill.isUploadingInlineImage,
+	});
 
 	// 댓글 수정 상태를 초기화합니다.
 	const resetEditingReplyState = () => {
@@ -480,6 +593,19 @@ export default function WorkWorkspacePage() {
 		setEditingReplyComment("");
 		setEditingReplyFiles([]);
 		setEditingDeleteReplyFileSeqList([]);
+	};
+
+	// 선택된 업무와 상세 패널을 함께 비웁니다.
+	const clearSelectedWorkState = () => {
+		setSelectedWorkSeq(null);
+		applyDetailResponse(null);
+	};
+
+	// 상태 필터 결과가 없을 때 목록/상세를 빈 상태로 초기화합니다.
+	const applyEmptyListState = () => {
+		setListResponse({ statusSectionList: [] });
+		setSectionLoadingMap({});
+		clearSelectedWorkState();
 	};
 
 	// 상세 응답을 반영하고 목록 카드도 함께 동기화합니다.
@@ -517,13 +643,15 @@ export default function WorkWorkspacePage() {
 		const targetIncludeBodyYn = typeof options.includeBodyYn === "string" ? options.includeBodyYn : includeBodyYn;
 		const targetStatusCodeList = options.workStatCdList ?? selectedStatusCodeList;
 		if (typeof targetCompanySeq !== "number" || targetCompanySeq < 1 || typeof targetProjectSeq !== "number" || targetProjectSeq < 1) {
-			setListResponse({ statusSectionList: [] });
-			setSelectedWorkSeq(options.preferredWorkSeq ?? null);
+			applyEmptyListState();
+			return;
+		}
+		if (targetStatusCodeList.length < 1) {
+			applyEmptyListState();
 			return;
 		}
 
 		setIsListLoading(true);
-		setMessage("");
 		try {
 			// 회사/프로젝트/검색 조건 기준으로 상태별 첫 10건 목록을 조회합니다.
 			const result = await fetchWorkList({
@@ -539,6 +667,8 @@ export default function WorkWorkspacePage() {
 				return;
 			}
 
+			// 정상 조회가 끝나면 상태별 추가 조회 상태를 초기화합니다.
+			setSectionLoadingMap({});
 			applyListResponse(result.data, options.preferredWorkSeq);
 		} finally {
 			setIsListLoading(false);
@@ -548,7 +678,6 @@ export default function WorkWorkspacePage() {
 	// 선택 업무 상세를 다시 조회합니다.
 	const loadDetail = async (workSeq: number) => {
 		setIsDetailLoading(true);
-		setMessage("");
 		try {
 			// 업무 상세, 첨부, 댓글을 한 번에 조회해 우측 패널에 반영합니다.
 			const result = await fetchWorkDetail(workSeq);
@@ -572,7 +701,6 @@ export default function WorkWorkspacePage() {
 
 		setDetailEditForm(nextForm);
 		setIsDetailSaving(true);
-		setMessage("");
 		try {
 			// 입력 중인 폼 값을 그대로 저장하고 최신 상세 응답으로 덮어씁니다.
 			const result = await updateWorkDetail(buildDetailUpdateRequest(nextForm), []);
@@ -615,11 +743,12 @@ export default function WorkWorkspacePage() {
 
 			const initialCompanySeq = bootstrapResult.data.companyList[0]?.workCompanySeq ?? null;
 			const initialProjectSeq = bootstrapResult.data.projectList[0]?.workCompanyProjectSeq ?? null;
+			const initialStatusCodeList = resolveAllStatusCodeList(bootstrapResult.data.workStatList ?? []);
 			setBootstrap(bootstrapResult.data);
 			setProjectList(bootstrapResult.data.projectList ?? []);
 			setSelectedCompanySeq(initialCompanySeq);
 			setSelectedProjectSeq(initialProjectSeq);
-			setSelectedStatusCodeList([]);
+			setSelectedStatusCodeList(initialStatusCodeList);
 			setIsInitializing(false);
 
 			if (initialCompanySeq && initialProjectSeq) {
@@ -628,10 +757,10 @@ export default function WorkWorkspacePage() {
 					workCompanyProjectSeq: initialProjectSeq,
 					title: "",
 					includeBodyYn: "N",
-					workStatCdList: [],
+					workStatCdList: initialStatusCodeList,
 				});
 			} else {
-				setListResponse({ statusSectionList: [] });
+				applyEmptyListState();
 			}
 		};
 
@@ -653,12 +782,15 @@ export default function WorkWorkspacePage() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [selectedWorkSeq]);
 
-	// 토스트 타이머를 컴포넌트 종료 시 정리합니다.
+	// 상태 전체 체크박스의 부분 선택 표시를 동기화합니다.
 	useEffect(() => {
-		return () => {
-			clearFeedbackToastTimer();
-		};
-	}, []);
+		if (!statusFilterAllInputRef.current) {
+			return;
+		}
+
+		// 일부 상태만 선택된 경우 indeterminate 상태를 적용합니다.
+		statusFilterAllInputRef.current.indeterminate = hasPartialStatusCodeSelection;
+	}, [hasPartialStatusCodeSelection]);
 
 	// 상태 필터 드롭다운 외부 클릭과 ESC 닫기를 처리합니다.
 	useEffect(() => {
@@ -733,15 +865,14 @@ export default function WorkWorkspacePage() {
 		setSelectedCompanySeq(nextCompanySeq);
 		setSelectedProjectSeq(null);
 		setProjectList([]);
-		setSelectedWorkSeq(null);
-		applyDetailResponse(null);
+		clearSelectedWorkState();
 		if (!nextCompanySeq) {
-			setListResponse({ statusSectionList: [] });
+			applyEmptyListState();
 			return;
 		}
 
 		setIsActionPending(true);
-		setMessage("");
+		setActionPendingMessage("프로젝트 목록과 업무 목록을 불러오고 있습니다.");
 		try {
 			// 회사 기준 프로젝트 목록을 조회하고 첫 프로젝트 기준 목록을 다시 로드합니다.
 			const result = await fetchWorkProjectList(nextCompanySeq);
@@ -763,6 +894,7 @@ export default function WorkWorkspacePage() {
 			});
 		} finally {
 			setIsActionPending(false);
+			setActionPendingMessage("");
 		}
 	};
 
@@ -770,8 +902,7 @@ export default function WorkWorkspacePage() {
 	const handleChangeProject = async (event: ChangeEvent<HTMLSelectElement>) => {
 		const nextProjectSeq = Number(event.target.value) || null;
 		setSelectedProjectSeq(nextProjectSeq);
-		setSelectedWorkSeq(null);
-		applyDetailResponse(null);
+		clearSelectedWorkState();
 		await loadWorkList({
 			workCompanySeq: selectedCompanySeq,
 			workCompanyProjectSeq: nextProjectSeq,
@@ -799,6 +930,7 @@ export default function WorkWorkspacePage() {
 			workKey: "",
 		});
 		void loadImportProjectList(nextWorkCompanySeq, nextWorkCompanyProjectSeq);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [companyList, isImportModalOpen, selectedCompanySeq, selectedProjectSeq]);
 
 	// 검색 폼 제출 시 현재 검색어를 반영합니다.
@@ -819,7 +951,7 @@ export default function WorkWorkspacePage() {
 	const handleToggleStatusCode = async (workStatCd: string) => {
 		const nextStatusCodeList = selectedStatusCodeList.includes(workStatCd)
 			? selectedStatusCodeList.filter((codeItem) => codeItem !== workStatCd)
-			: [...selectedStatusCodeList, workStatCd];
+			: allStatusCodeList.filter((codeItem) => codeItem === workStatCd || selectedStatusCodeList.includes(codeItem));
 		setSelectedStatusCodeList(nextStatusCodeList);
 		await loadWorkList({
 			workCompanySeq: selectedCompanySeq,
@@ -830,9 +962,9 @@ export default function WorkWorkspacePage() {
 		});
 	};
 
-	// 상태 필터 전체 선택을 적용합니다.
-	const handleSelectAllStatusCodes = async () => {
-		const nextStatusCodeList = workStatList.map((codeItem) => codeItem.cd);
+	// 상태 필터 전체 체크박스 변경을 반영합니다.
+	const handleToggleAllStatusCodes = async (event: ChangeEvent<HTMLInputElement>) => {
+		const nextStatusCodeList = event.target.checked ? allStatusCodeList : [];
 		setSelectedStatusCodeList(nextStatusCodeList);
 		await loadWorkList({
 			workCompanySeq: selectedCompanySeq,
@@ -840,18 +972,6 @@ export default function WorkWorkspacePage() {
 			title: searchKeyword,
 			includeBodyYn,
 			workStatCdList: nextStatusCodeList,
-		});
-	};
-
-	// 상태 필터를 모두 해제합니다.
-	const handleClearStatusCodes = async () => {
-		setSelectedStatusCodeList([]);
-		await loadWorkList({
-			workCompanySeq: selectedCompanySeq,
-			workCompanyProjectSeq: selectedProjectSeq,
-			title: searchKeyword,
-			includeBodyYn,
-			workStatCdList: [],
 		});
 	};
 
@@ -867,7 +987,6 @@ export default function WorkWorkspacePage() {
 		}
 
 		setSectionLoadingMap((prevState) => ({ ...prevState, [workStatCd]: true }));
-		setMessage("");
 		try {
 			// 특정 상태 코드의 다음 10건을 추가 조회해 기존 목록 뒤에 붙입니다.
 			const result = await fetchWorkSectionMore({
@@ -916,11 +1035,13 @@ export default function WorkWorkspacePage() {
 	// 로그아웃 후 로그인 화면으로 이동합니다.
 	const handleClickLogout = async () => {
 		setIsActionPending(true);
+		setActionPendingMessage("로그아웃하고 있습니다.");
 		try {
 			await logoutWork();
 			await router.replace("/work/login?returnUrl=%2Fwork");
 		} finally {
 			setIsActionPending(false);
+			setActionPendingMessage("");
 		}
 	};
 
@@ -991,7 +1112,7 @@ export default function WorkWorkspacePage() {
 		}
 
 		setIsReplySaving(true);
-		setMessage("");
+		setReplySavingMessage("댓글을 등록하고 있습니다.");
 		try {
 			// Quill HTML 댓글과 첨부파일을 저장한 뒤 상세를 다시 조회합니다.
 			const result = await createWorkReply({
@@ -1012,6 +1133,7 @@ export default function WorkWorkspacePage() {
 			showFeedbackToast("댓글을 등록했습니다.");
 		} finally {
 			setIsReplySaving(false);
+			setReplySavingMessage("");
 		}
 	};
 
@@ -1058,7 +1180,7 @@ export default function WorkWorkspacePage() {
 		}
 
 		setIsReplySaving(true);
-		setMessage("");
+		setReplySavingMessage("댓글을 수정하고 있습니다.");
 		try {
 			// 댓글 수정 내용과 삭제/추가 첨부를 함께 저장한 뒤 상세를 다시 로드합니다.
 			const result = await updateWorkReply({
@@ -1077,13 +1199,14 @@ export default function WorkWorkspacePage() {
 			showFeedbackToast("댓글을 수정했습니다.");
 		} finally {
 			setIsReplySaving(false);
+			setReplySavingMessage("");
 		}
 	};
 
 	// 댓글 삭제를 처리합니다.
 	const handleDeleteReply = async (reply: WorkReply) => {
 		setIsReplySaving(true);
-		setMessage("");
+		setReplySavingMessage("댓글을 삭제하고 있습니다.");
 		try {
 			// 댓글을 삭제하고 상세 및 댓글 수를 최신 상태로 맞춥니다.
 			const result = await deleteWorkReply({
@@ -1102,6 +1225,7 @@ export default function WorkWorkspacePage() {
 			showFeedbackToast("댓글을 삭제했습니다.");
 		} finally {
 			setIsReplySaving(false);
+			setReplySavingMessage("");
 		}
 	};
 
@@ -1149,7 +1273,6 @@ export default function WorkWorkspacePage() {
 		}
 
 		setIsManualSaving(true);
-		setMessage("");
 		try {
 			// 선택 회사/프로젝트 기준으로 수기 업무를 등록합니다.
 			const result = await createWorkManual({
@@ -1199,7 +1322,6 @@ export default function WorkWorkspacePage() {
 		}
 
 		setIsImportSaving(true);
-		setMessage("");
 		try {
 			// 모달에서 선택한 회사/프로젝트 기준으로 SR 업무를 가져옵니다.
 			const command: WorkImportRequest = {
@@ -1360,14 +1482,16 @@ export default function WorkWorkspacePage() {
 			</Head>
 
 			<div className={styles.pageShell}>
-				{message !== "" ? <p className={styles.messageBar}>{message}</p> : null}
-				<div className={`${styles.feedbackToast} ${isFeedbackToastVisible ? styles.feedbackToastVisible : ""}`}>
-					{feedbackToastMessage}
-				</div>
+				<FeedbackLayer
+					successMessage={successMessage}
+					isSuccessVisible={isSuccessVisible}
+					errorMessage={errorMessage}
+					loadingVisible={blockingLoadingMessage !== ""}
+					loadingMessage={blockingLoadingMessage}
+					onErrorClose={clearError}
+				/>
 
-				{isInitializing ? (
-					<p className={styles.loadingText}>업무 화면을 준비하고 있습니다.</p>
-				) : (
+				{!isInitializing ? (
 					<div className={styles.workspaceShell}>
 						<aside className={styles.sidebar}>
 							<div className={styles.sidebarTop}>
@@ -1420,15 +1544,16 @@ export default function WorkWorkspacePage() {
 											</button>
 											{statusFilterOpen ? (
 												<div className={styles.statusComboPanel}>
-													<div className={styles.statusComboActions}>
-														<button type="button" className={styles.comboActionButton} onClick={() => void handleSelectAllStatusCodes()}>
-															전체 선택
-														</button>
-														<button type="button" className={styles.comboActionButton} onClick={() => void handleClearStatusCodes()}>
-															전체 해제
-														</button>
-													</div>
 													<div className={styles.statusOptionList}>
+														<label className={`${styles.statusOptionItem} ${styles.statusOptionAllItem}`}>
+															<input
+																ref={statusFilterAllInputRef}
+																type="checkbox"
+																checked={isAllStatusCodeSelected}
+																onChange={(event) => void handleToggleAllStatusCodes(event)}
+															/>
+															<span className={styles.statusOptionText}>전체</span>
+														</label>
 														{workStatList.map((codeItem) => (
 															<label key={codeItem.cd} className={styles.statusOptionItem}>
 																<input
@@ -1448,7 +1573,6 @@ export default function WorkWorkspacePage() {
 							</div>
 
 							<div className={styles.sidebarListSection}>
-								{isListLoading ? <p className={styles.loadingText}>업무 목록을 불러오고 있습니다.</p> : null}
 								{!isListLoading && visibleStatusSectionList.length < 1 ? (
 									<div className={styles.emptyState}>조회된 업무가 없습니다.</div>
 								) : null}
@@ -1502,7 +1626,6 @@ export default function WorkWorkspacePage() {
 						</aside>
 
 						<main className={styles.detailPanel}>
-							{isDetailLoading ? <p className={styles.loadingText}>업무 상세를 불러오고 있습니다.</p> : null}
 							{!isDetailLoading && !selectedDetail ? (
 								<div className={styles.emptyDetailState}>좌측 목록에서 업무를 선택하면 상세를 바로 수정할 수 있습니다.</div>
 							) : null}
@@ -1523,7 +1646,7 @@ export default function WorkWorkspacePage() {
 									</div>
 
 									<div className={styles.metaRows}>
-										<div className={styles.metaRow}>
+										<div className={`${styles.metaRow} ${styles.metaRowWide}`}>
 											<div className={styles.metaInlineField}>
 												<span className={styles.metaLabel}>IT담당자</span>
 												<div className={styles.metaControl}>
@@ -1540,16 +1663,14 @@ export default function WorkWorkspacePage() {
 											</div>
 											<div className={styles.metaInlineField}>
 												<span className={styles.metaLabel}>업무담당자</span>
-												<div className={styles.metaControl}>
-													<input
-														type="text"
-														className={styles.metaInput}
-														value={detailEditForm.coManager}
-														onChange={(event) => handleChangeDetailField("coManager", event.target.value)}
-														onBlur={() => void handleCommitDetailField("coManager")}
-														onKeyDown={(event) => void handleKeyDownCommitInput(event, "coManager")}
-														placeholder="업무담당자 입력"
-													/>
+												<div className={styles.metaValueShell}>
+													<span className={styles.metaReadonlyValue}>{trimText(detailEditForm.coManager) || "-"}</span>
+												</div>
+											</div>
+											<div className={styles.metaInlineField}>
+												<span className={styles.metaLabel}>우선순위</span>
+												<div className={styles.metaValueShell}>
+													<span className={styles.metaReadonlyValue}>{trimText(selectedDetail.workPriorNm) || "-"}</span>
 												</div>
 											</div>
 											<div className={styles.metaInlineField}>
@@ -1759,7 +1880,7 @@ export default function WorkWorkspacePage() {
 							) : null}
 						</main>
 					</div>
-				)}
+				) : null}
 
 				{isManualModalOpen ? (
 					<WorkModalShell title="업무 수기등록" onClose={() => !isManualSaving && setIsManualModalOpen(false)}>
