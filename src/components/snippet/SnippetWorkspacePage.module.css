@@ -78,7 +78,7 @@
 }
 
 .editorModalDialog {
-	width: min(1120px, calc(100vw - 2rem));
+	width: min(450px, calc(100vw - 2rem));
 	max-height: calc(100vh - 2rem);
 	padding: 1rem;
 	border: 1px solid var(--panel-border-strong);
