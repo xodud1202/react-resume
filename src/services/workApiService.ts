@@ -4,6 +4,7 @@ import type {
 	WorkDetailResponse,
 	WorkDetailUpdateRequest,
 	WorkFile,
+	WorkFileDownloadData,
 	WorkFileDeleteRequest,
 	WorkImportRequest,
 	WorkImportResponse,
@@ -17,7 +18,6 @@ import type {
 	WorkReply,
 	WorkReplyDeleteRequest,
 	WorkReplyFile,
-	WorkReplyFileDownloadData,
 	WorkReplySaveRequest,
 	WorkReplyUpdateRequest,
 	WorkSessionRefreshResponse,
@@ -259,6 +259,21 @@ function resolveDownloadFileName(contentDisposition: string | undefined): string
 
 	const fileNameMatch = contentDisposition.match(/filename=\"?([^\"]+)\"?/i);
 	return fileNameMatch?.[1] || "";
+}
+
+// 업무관리 첨부파일 다운로드 API 응답을 Blob과 파일명으로 정리합니다.
+async function downloadWorkAttachment(url: string, errorMessage: string): Promise<WorkFileDownloadData> {
+	const response = await fetch(url, {
+		credentials: "include",
+	});
+	if (!response.ok) {
+		throw new Error(errorMessage);
+	}
+	const fileBlob = await response.blob();
+	return {
+		fileName: resolveDownloadFileName(response.headers.get("content-disposition") ?? undefined),
+		blob: fileBlob,
+	};
 }
 
 // 업무관리 공통 API 요청을 수행합니다.
@@ -504,16 +519,17 @@ export async function deleteWorkReply(command: WorkReplyDeleteRequest): Promise<
 }
 
 // 댓글 첨부파일을 다운로드합니다.
-export async function downloadWorkReplyFile(replyFileSeq: number): Promise<WorkReplyFileDownloadData> {
-	const response = await fetch(`/api/work/reply/file/download?replyFileSeq=${replyFileSeq}`, {
-		credentials: "include",
-	});
-	if (!response.ok) {
-		throw new Error("댓글 첨부파일 다운로드에 실패했습니다.");
-	}
-	const fileBlob = await response.blob();
-	return {
-		fileName: resolveDownloadFileName(response.headers.get("content-disposition") ?? undefined),
-		blob: fileBlob,
-	};
+export async function downloadWorkReplyFile(replyFileSeq: number): Promise<WorkFileDownloadData> {
+	return downloadWorkAttachment(
+		`/api/work/reply/file/download?replyFileSeq=${replyFileSeq}`,
+		"댓글 첨부파일 다운로드에 실패했습니다.",
+	);
+}
+
+// 업무 첨부파일을 다운로드합니다.
+export async function downloadWorkFile(workJobFileSeq: number): Promise<WorkFileDownloadData> {
+	return downloadWorkAttachment(
+		`/api/work/file/download?workJobFileSeq=${workJobFileSeq}`,
+		"업무 첨부파일 다운로드에 실패했습니다.",
+	);
 }

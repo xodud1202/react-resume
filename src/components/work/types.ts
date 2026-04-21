@@ -362,10 +362,13 @@ export interface WorkReplyDeleteRequest {
 	workSeq: number;
 }
 
-// 댓글 첨부파일 다운로드 결과를 정의합니다.
-export interface WorkReplyFileDownloadData {
+// 업무 첨부파일 다운로드 결과를 정의합니다.
+export interface WorkFileDownloadData {
 	// 파일명입니다.
 	fileName: string;
 	// Blob 데이터입니다.
 	blob: Blob;
 }
+
+// 댓글 첨부파일 다운로드 결과는 업무 첨부 다운로드 형식을 재사용합니다.
+export type WorkReplyFileDownloadData = WorkFileDownloadData;

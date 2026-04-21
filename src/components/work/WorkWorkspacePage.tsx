@@ -29,6 +29,7 @@ import {
 	createWorkManual,
 	createWorkReply,
 	deleteWorkReply,
+	downloadWorkFile,
 	downloadWorkReplyFile,
 	fetchWorkBootstrap,
 	fetchWorkDetail,
@@ -1460,12 +1461,16 @@ export default function WorkWorkspacePage() {
 		}));
 	};
 
-	// 업무 첨부를 새 창 다운로드로 엽니다.
-	const handleOpenWorkFile = (fileItem: WorkFile) => {
-		if (!fileItem.workJobFileUrl) {
-			return;
+	// 업무 첨부파일 다운로드를 처리합니다.
+	const handleDownloadWorkFile = async (workFile: WorkFile) => {
+		try {
+			// 업무 첨부 다운로드 API 호출 뒤 브라우저 다운로드를 시작합니다.
+			const downloadData = await downloadWorkFile(workFile.workJobFileSeq);
+			triggerBrowserFileDownload(downloadData.blob, downloadData.fileName || workFile.workJobFileNm || "work-file");
+		} catch (errorObject) {
+			console.error("업무 첨부파일 다운로드에 실패했습니다.", errorObject);
+			setMessage("업무 첨부파일 다운로드에 실패했습니다.");
 		}
-		window.open(fileItem.workJobFileUrl, "_blank", "noopener,noreferrer");
 	};
 
 	// 댓글 수정 가능 여부를 판단합니다.
@@ -1482,11 +1487,11 @@ export default function WorkWorkspacePage() {
 					<img src={fileItem.workJobFileUrl} alt={fileItem.workJobFileNm || "업무 첨부 이미지"} className={styles.filePreviewImage} />
 				</button>
 			) : (
-				<button type="button" className={styles.filePreviewFallback} onClick={() => handleOpenWorkFile(fileItem)}>
+				<button type="button" className={styles.filePreviewFallback} onClick={() => void handleDownloadWorkFile(fileItem)}>
 					FILE
 				</button>
 			)}
-			<button type="button" className={styles.fileNameButton} onClick={() => handleOpenWorkFile(fileItem)}>
+			<button type="button" className={styles.fileNameButton} onClick={() => void handleDownloadWorkFile(fileItem)}>
 				{fileItem.workJobFileNm || "첨부파일"}
 			</button>
 		</div>
