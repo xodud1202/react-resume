@@ -354,6 +354,16 @@ export interface WorkReplyUpdateRequest {
 	deleteReplyFileSeqList: number[];
 }
 
+// 댓글 컴포저 저장 payload를 정의합니다.
+export interface WorkReplyComposerSubmitPayload {
+	// 댓글 본문 HTML입니다.
+	replyComment: string;
+	// 새로 추가한 첨부파일 목록입니다.
+	newFiles: File[];
+	// 삭제 대상으로 표시한 기존 댓글 첨부파일 번호 목록입니다.
+	deleteReplyFileSeqList: number[];
+}
+
 // 댓글 삭제 요청을 정의합니다.
 export interface WorkReplyDeleteRequest {
 	// 댓글 번호입니다.

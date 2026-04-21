@@ -5,7 +5,7 @@ import FeedbackLayer from "@/components/common/FeedbackLayer";
 import useResizableSplitLayout from "@/components/common/useResizableSplitLayout";
 import useFeedbackLayer from "@/components/common/useFeedbackLayer";
 import AdminDateInput from "@/components/work/AdminDateInput";
-import LazyQuillEditor from "@/components/work/LazyQuillEditor";
+import WorkReplyComposer from "@/components/work/WorkReplyComposer";
 import WorkReadonlyHtml from "@/components/work/WorkReadonlyHtml";
 import type {
 	WorkBootstrapResponse,
@@ -22,9 +22,10 @@ import type {
 	WorkListRow,
 	WorkProjectOption,
 	WorkReply,
+	WorkReplyComposerSubmitPayload,
 	WorkReplyFile,
 } from "@/components/work/types";
-import useWorkQuillImageUpload from "@/components/work/useWorkQuillImageUpload";
+import { isImageReplyFile, isImageSelectedFile, isImageWorkFile } from "@/components/work/workAttachmentUtils";
 import {
 	createWorkManual,
 	createWorkReply,
@@ -45,30 +46,8 @@ import {
 import styles from "./WorkWorkspacePage.module.css";
 
 const DEFAULT_SECTION_PAGE_SIZE = 10;
-const IMAGE_FILE_PATTERN = /\.(png|jpe?g|gif|bmp|webp|svg)(\?|$)/i;
-const REPLY_EDITOR_TOOLBAR_OPTIONS = [
-	[{ header: [1, 2, 3, false] }],
-	["bold", "italic", "underline", "strike"],
-	[{ list: "ordered" }, { list: "bullet" }],
-	[{ color: [] }, { background: [] }],
-	["blockquote", "code-block", "link", "image"],
-	["clean"],
-];
-const REPLY_EDITOR_FORMATS = [
-	"header",
-	"bold",
-	"italic",
-	"underline",
-	"strike",
-	"list",
-	"bullet",
-	"color",
-	"background",
-	"blockquote",
-	"code-block",
-	"link",
-	"image",
-];
+const WORK_COMPLETED_STATUS_CODE = "WORK_STAT_05";
+const WORK_HOLD_STATUS_CODE = "WORK_STAT_90";
 
 interface DetailEditFormState {
 	// 현재 편집 중인 업무 번호입니다.
@@ -122,26 +101,6 @@ function resolveSafeReturnUrl(value: string | string[] | undefined): string {
 // 입력값을 공백 제거한 문자열로 정리합니다.
 function trimText(value: string | null | undefined): string {
 	return typeof value === "string" ? value.trim() : "";
-}
-
-// 이미지 첨부 여부를 파일명과 URL 기준으로 판단합니다.
-function isImageAttachmentByValues(fileName: string, fileUrl?: string | null): boolean {
-	return IMAGE_FILE_PATTERN.test(fileName || "") || IMAGE_FILE_PATTERN.test(fileUrl || "");
-}
-
-// 업무 첨부파일이 이미지인지 판단합니다.
-function isImageWorkFile(file: WorkFile): boolean {
-	return isImageAttachmentByValues(file.workJobFileNm, file.workJobFileUrl);
-}
-
-// 댓글 첨부파일이 이미지인지 판단합니다.
-function isImageReplyFile(file: WorkReplyFile): boolean {
-	return isImageAttachmentByValues(file.replyFileNm, file.replyFileUrl);
-}
-
-// 브라우저에서 선택한 파일이 이미지인지 판단합니다.
-function isImageSelectedFile(file: File): boolean {
-	return file.type.startsWith("image/") || isImageAttachmentByValues(file.name);
 }
 
 // 상세 편집 폼의 빈 초기값을 생성합니다.
@@ -301,17 +260,19 @@ function applyUpdatedWorkRowToListResponse(listResponse: WorkListResponse | null
 
 			const filteredList = sectionItem.list.filter((rowItem) => rowItem.workSeq !== updatedRow.workSeq);
 			if (sectionItem.workStatCd !== updatedRow.workStatCd) {
+				const nextTotalCount = Math.max(0, sectionItem.totalCount - (currentRow ? 1 : 0));
 				return {
 					...sectionItem,
 					list: filteredList,
-					totalCount: Math.max(0, sectionItem.totalCount - (currentRow ? 1 : 0)),
-					hasMore: sectionItem.hasMore || (currentRow ? sectionItem.totalCount - 1 > filteredList.length : false),
+					totalCount: nextTotalCount,
+					hasMore: nextTotalCount > filteredList.length,
 				};
 			}
 
 			const nextList = sortWorkListRowsByCreateDt([...filteredList, updatedRow]);
-			const visibleList = nextList.slice(0, Math.max(sectionItem.list.length, currentRow ? sectionItem.list.length : 1));
 			const nextTotalCount = currentRow ? sectionItem.totalCount : sectionItem.totalCount + 1;
+			const visibleListLimit = currentRow ? sectionItem.list.length : sectionItem.list.length + 1;
+			const visibleList = nextList.slice(0, visibleListLimit);
 			return {
 				...sectionItem,
 				list: visibleList,
@@ -332,6 +293,15 @@ function resolveAllStatusCodeList(workStatList: WorkCommonCode[]): string[] {
 	return workStatList
 		.map((codeItem) => trimText(codeItem.cd))
 		.filter((codeItem, index, codeList) => codeItem !== "" && codeList.indexOf(codeItem) === index);
+}
+
+// 화면 첫 진입 시 기본 선택할 상태 코드 목록을 계산합니다.
+function resolveInitialSelectedStatusCodeList(workStatList: WorkCommonCode[]): string[] {
+	const allStatusCodeList = resolveAllStatusCodeList(workStatList);
+	const defaultStatusCodeList = allStatusCodeList.filter(
+		(codeItem) => codeItem !== WORK_COMPLETED_STATUS_CODE && codeItem !== WORK_HOLD_STATUS_CODE,
+	);
+	return defaultStatusCodeList.length > 0 ? defaultStatusCodeList : allStatusCodeList;
 }
 
 // 상태 필터 버튼 문구를 계산합니다.
@@ -414,11 +384,6 @@ function WorkPriorityIcon({
 			</svg>
 		</span>
 	);
-}
-
-// Quill HTML에서 실제 보이는 텍스트가 있는지 판단합니다.
-function hasVisibleEditorText(value: string): boolean {
-	return value.replace(/<img[^>]*>/gi, " IMG ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() !== "";
 }
 
 // Blob 다운로드를 브라우저에 위임합니다.
@@ -548,8 +513,6 @@ export default function WorkWorkspacePage() {
 	const router = useRouter();
 	const statusFilterRef = useRef<HTMLDivElement | null>(null);
 	const statusFilterAllInputRef = useRef<HTMLInputElement | null>(null);
-	const replyFileInputRef = useRef<HTMLInputElement | null>(null);
-	const editingReplyFileInputRef = useRef<HTMLInputElement | null>(null);
 	const workSplitLayout = useResizableSplitLayout({
 		defaultPrimaryWidth: 340,
 		minPrimaryWidth: 280,
@@ -589,12 +552,9 @@ export default function WorkWorkspacePage() {
 	const [manualFiles, setManualFiles] = useState<File[]>([]);
 	const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 	const [isImportSaving, setIsImportSaving] = useState(false);
-	const [replyComment, setReplyComment] = useState("");
-	const [replyFiles, setReplyFiles] = useState<File[]>([]);
 	const [editingReplySeq, setEditingReplySeq] = useState<number | null>(null);
-	const [editingReplyComment, setEditingReplyComment] = useState("");
-	const [editingReplyFiles, setEditingReplyFiles] = useState<File[]>([]);
-	const [editingDeleteReplyFileSeqList, setEditingDeleteReplyFileSeqList] = useState<number[]>([]);
+	const [isReplyComposerImageUploading, setIsReplyComposerImageUploading] = useState(false);
+	const [isEditingReplyComposerImageUploading, setIsEditingReplyComposerImageUploading] = useState(false);
 
 	// 기존 message 호출을 중앙 오류 박스 제어로 변환합니다.
 	const setMessage = (nextMessage: string) => {
@@ -610,24 +570,6 @@ export default function WorkWorkspacePage() {
 		showSuccess(toastMessage);
 	};
 
-	const replyQuill = useWorkQuillImageUpload({
-		toolbarOptions: REPLY_EDITOR_TOOLBAR_OPTIONS,
-		formats: REPLY_EDITOR_FORMATS,
-		onChange: setReplyComment,
-		editorId: "work-reply-editor",
-		onError: setMessage,
-	});
-	const editingReplyEditorId = useMemo(
-		() => `work-reply-editor-${editingReplySeq ?? "new"}`,
-		[editingReplySeq],
-	);
-	const editingReplyQuill = useWorkQuillImageUpload({
-		toolbarOptions: REPLY_EDITOR_TOOLBAR_OPTIONS,
-		formats: REPLY_EDITOR_FORMATS,
-		onChange: setEditingReplyComment,
-		editorId: editingReplyEditorId,
-		onError: setMessage,
-	});
 	const workStatList = useMemo(() => bootstrap?.workStatList ?? [], [bootstrap]);
 	const allStatusCodeList = useMemo(() => resolveAllStatusCodeList(workStatList), [workStatList]);
 	const workPriorList = useMemo(() => bootstrap?.workPriorList ?? [], [bootstrap]);
@@ -662,16 +604,14 @@ export default function WorkWorkspacePage() {
 		hasSectionLoading,
 		isDetailLoading,
 		isListLoading,
-		isReplyImageUploading: replyQuill.isUploadingInlineImage,
-		isEditingReplyImageUploading: editingReplyQuill.isUploadingInlineImage,
+		isReplyImageUploading: isReplyComposerImageUploading,
+		isEditingReplyImageUploading: isEditingReplyComposerImageUploading,
 	});
 
 	// 댓글 수정 상태를 초기화합니다.
 	const resetEditingReplyState = () => {
 		setEditingReplySeq(null);
-		setEditingReplyComment("");
-		setEditingReplyFiles([]);
-		setEditingDeleteReplyFileSeqList([]);
+		setIsEditingReplyComposerImageUploading(false);
 	};
 
 	// 선택된 업무와 상세 패널을 함께 비웁니다.
@@ -822,7 +762,7 @@ export default function WorkWorkspacePage() {
 
 			const initialCompanySeq = bootstrapResult.data.companyList[0]?.workCompanySeq ?? null;
 			const initialProjectSeq = bootstrapResult.data.projectList[0]?.workCompanyProjectSeq ?? null;
-			const initialStatusCodeList = resolveAllStatusCodeList(bootstrapResult.data.workStatList ?? []);
+			const initialStatusCodeList = resolveInitialSelectedStatusCodeList(bootstrapResult.data.workStatList ?? []);
 			setBootstrap(bootstrapResult.data);
 			setProjectList(bootstrapResult.data.projectList ?? []);
 			setSelectedCompanySeq(initialCompanySeq);
@@ -1165,29 +1105,10 @@ export default function WorkWorkspacePage() {
 		await persistDetailForm(nextForm);
 	};
 
-	// 댓글 신규 첨부파일 선택을 처리합니다.
-	const handleChangeReplyFiles = (event: ChangeEvent<HTMLInputElement>) => {
-		const nextFileList = Array.from(event.target.files || []);
-		if (nextFileList.length < 1) {
-			return;
-		}
-		setReplyFiles((prevState) => [...prevState, ...nextFileList]);
-		event.target.value = "";
-	};
-
-	// 댓글 신규 첨부파일을 목록에서 제거합니다.
-	const handleRemoveReplyFile = (targetIndex: number) => {
-		setReplyFiles((prevState) => prevState.filter((_, fileIndex) => fileIndex !== targetIndex));
-	};
-
 	// 댓글을 저장합니다.
-	const handleSaveReply = async () => {
+	const handleSaveReply = async (payload: WorkReplyComposerSubmitPayload): Promise<boolean> => {
 		if (!selectedDetail) {
-			return;
-		}
-		if (!hasVisibleEditorText(replyComment) && replyFiles.length < 1) {
-			setMessage("댓글 내용 또는 첨부파일을 등록해주세요.");
-			return;
+			return false;
 		}
 
 		setIsReplySaving(true);
@@ -1196,20 +1117,16 @@ export default function WorkWorkspacePage() {
 			// Quill HTML 댓글과 첨부파일을 저장한 뒤 상세를 다시 조회합니다.
 			const result = await createWorkReply({
 				workSeq: selectedDetail.workSeq,
-				replyComment,
-			}, replyFiles);
+				replyComment: payload.replyComment,
+			}, payload.newFiles);
 			if (!result.ok || !result.data) {
 				setMessage(result.message || "댓글 등록에 실패했습니다.");
-				return;
+				return false;
 			}
 
-			setReplyComment("");
-			setReplyFiles([]);
-			if (replyFileInputRef.current) {
-				replyFileInputRef.current.value = "";
-			}
 			await loadDetail(selectedDetail.workSeq);
 			showFeedbackToast("댓글을 등록했습니다.");
+			return true;
 		} finally {
 			setIsReplySaving(false);
 			setReplySavingMessage("");
@@ -1218,46 +1135,12 @@ export default function WorkWorkspacePage() {
 
 	// 댓글 수정 모드를 시작합니다.
 	const handleStartEditReply = (reply: WorkReply) => {
+		setIsEditingReplyComposerImageUploading(false);
 		setEditingReplySeq(reply.replySeq);
-		setEditingReplyComment(reply.replyComment || "");
-		setEditingReplyFiles([]);
-		setEditingDeleteReplyFileSeqList([]);
-	};
-
-	// 댓글 수정 신규 첨부파일 선택을 처리합니다.
-	const handleChangeEditingReplyFiles = (event: ChangeEvent<HTMLInputElement>) => {
-		const nextFileList = Array.from(event.target.files || []);
-		if (nextFileList.length < 1) {
-			return;
-		}
-		setEditingReplyFiles((prevState) => [...prevState, ...nextFileList]);
-		event.target.value = "";
-	};
-
-	// 댓글 수정 신규 첨부파일을 목록에서 제거합니다.
-	const handleRemoveEditingReplyFile = (targetIndex: number) => {
-		setEditingReplyFiles((prevState) => prevState.filter((_, fileIndex) => fileIndex !== targetIndex));
-	};
-
-	// 기존 댓글 첨부파일 삭제 대상을 토글합니다.
-	const handleToggleDeleteEditingReplyFile = (replyFileSeq: number) => {
-		setEditingDeleteReplyFileSeqList((prevState) => (
-			prevState.includes(replyFileSeq)
-				? prevState.filter((targetSeq) => targetSeq !== replyFileSeq)
-				: [...prevState, replyFileSeq]
-		));
 	};
 
 	// 댓글 수정 저장을 처리합니다.
-	const handleUpdateReply = async (reply: WorkReply) => {
-		const activeExistingFileCount = reply.replyFileList.filter(
-			(fileItem) => !editingDeleteReplyFileSeqList.includes(fileItem.replyFileSeq),
-		).length;
-		if (!hasVisibleEditorText(editingReplyComment) && activeExistingFileCount < 1 && editingReplyFiles.length < 1) {
-			setMessage("댓글 내용 또는 첨부파일을 등록해주세요.");
-			return;
-		}
-
+	const handleUpdateReply = async (reply: WorkReply, payload: WorkReplyComposerSubmitPayload): Promise<boolean> => {
 		setIsReplySaving(true);
 		setReplySavingMessage("댓글을 수정하고 있습니다.");
 		try {
@@ -1265,17 +1148,18 @@ export default function WorkWorkspacePage() {
 			const result = await updateWorkReply({
 				replySeq: reply.replySeq,
 				workSeq: reply.workSeq,
-				replyComment: editingReplyComment,
-				deleteReplyFileSeqList: editingDeleteReplyFileSeqList,
-			}, editingReplyFiles);
+				replyComment: payload.replyComment,
+				deleteReplyFileSeqList: payload.deleteReplyFileSeqList,
+			}, payload.newFiles);
 			if (!result.ok || !result.data) {
 				setMessage(result.message || "댓글 수정에 실패했습니다.");
-				return;
+				return false;
 			}
 
 			resetEditingReplyState();
 			await loadDetail(reply.workSeq);
 			showFeedbackToast("댓글을 수정했습니다.");
+			return true;
 		} finally {
 			setIsReplySaving(false);
 			setReplySavingMessage("");
@@ -1526,36 +1410,6 @@ export default function WorkWorkspacePage() {
 			</button>
 		</div>
 	);
-
-	// 댓글 수정 중 기존 첨부 타일을 렌더링합니다.
-	const renderEditingReplyFileTile = (fileItem: WorkReplyFile) => {
-		const isDeleted = editingDeleteReplyFileSeqList.includes(fileItem.replyFileSeq);
-		return (
-			<div key={fileItem.replyFileSeq} className={`${styles.fileTile} ${isDeleted ? styles.fileTileDimmed : ""}`}>
-				{isImageReplyFile(fileItem) && fileItem.replyFileUrl ? (
-					<button type="button" className={styles.filePreviewButton} onClick={() => setPreviewImageUrl(fileItem.replyFileUrl)}>
-						{/* eslint-disable-next-line @next/next/no-img-element */}
-						<img src={fileItem.replyFileUrl} alt={fileItem.replyFileNm || "댓글 첨부 이미지"} className={styles.filePreviewImage} />
-					</button>
-				) : (
-					<button type="button" className={styles.filePreviewFallback} onClick={() => void handleDownloadReplyFile(fileItem)}>
-						FILE
-					</button>
-				)}
-				<button type="button" className={styles.fileNameButton} onClick={() => void handleDownloadReplyFile(fileItem)}>
-					{fileItem.replyFileNm || "첨부파일"}
-				</button>
-				<button
-					type="button"
-					className={styles.fileDeleteButton}
-					onClick={() => handleToggleDeleteEditingReplyFile(fileItem.replyFileSeq)}
-					disabled={isReplySaving}
-				>
-					{isDeleted ? "삭제취소" : "삭제"}
-				</button>
-			</div>
-		);
-	};
 
 	return (
 		<>
@@ -1892,36 +1746,21 @@ export default function WorkWorkspacePage() {
 														</div>
 
 														{editingReplySeq === replyItem.replySeq ? (
-															<div className={styles.replyEditShell}>
-																<div className={styles.quillShell}>
-																	<LazyQuillEditor
-																		id={editingReplyEditorId}
-																		ref={editingReplyQuill.quillRef}
-																		theme="snow"
-																		value={editingReplyComment}
-																		onChange={editingReplyQuill.handleEditorChange}
-																		modules={editingReplyQuill.quillModules}
-																		formats={editingReplyQuill.quillFormats}
-																	/>
-																</div>
-																<div className={styles.fileTileGrid}>
-																	{replyItem.replyFileList.map((fileItem) => renderEditingReplyFileTile(fileItem))}
-																	{editingReplyFiles.map((fileItem, fileIndex) => renderSelectedFileTile(fileItem, `editing-${fileIndex}`, () => handleRemoveEditingReplyFile(fileIndex)))}
-																	<button type="button" className={`${styles.fileTile} ${styles.fileTileAdd}`} onClick={() => editingReplyFileInputRef.current?.click()}>
-																		<span className={styles.fileAddIcon}>+</span>
-																		<span className={styles.fileNameLabel}>첨부 추가</span>
-																	</button>
-																</div>
-																<input ref={editingReplyFileInputRef} type="file" multiple className={styles.hiddenFileInput} onChange={handleChangeEditingReplyFiles} />
-																<div className={styles.replyActionRow}>
-																	<button type="button" className={styles.primaryButton} onClick={() => void handleUpdateReply(replyItem)} disabled={isReplySaving}>
-																		{isReplySaving ? "저장 중..." : "수정 저장"}
-																	</button>
-																	<button type="button" className={styles.secondaryButton} onClick={resetEditingReplyState} disabled={isReplySaving}>
-																		취소
-																	</button>
-																</div>
-															</div>
+															<WorkReplyComposer
+																key={`work-reply-edit-${replyItem.workSeq}-${replyItem.replySeq}`}
+																mode="edit"
+																workSeq={replyItem.workSeq}
+																replySeq={replyItem.replySeq}
+																initialHtml={replyItem.replyComment || ""}
+																existingFiles={replyItem.replyFileList}
+																isSubmitting={isReplySaving}
+																onSubmit={(payload) => handleUpdateReply(replyItem, payload)}
+																onCancel={resetEditingReplyState}
+																onError={setMessage}
+																onPreviewImage={setPreviewImageUrl}
+																onDownloadFile={(fileItem) => void handleDownloadReplyFile(fileItem)}
+																onInlineImageUploadingChange={setIsEditingReplyComposerImageUploading}
+															/>
 														) : (
 															<>
 																<WorkReadonlyHtml
@@ -1947,34 +1786,18 @@ export default function WorkWorkspacePage() {
 											<h2 className={styles.sectionTitle}>댓글쓰기</h2>
 											<span className={styles.sectionHint}>react-quill-new 적용</span>
 										</div>
-										<div className={styles.replyEditorShell}>
-											<div className={styles.quillShell}>
-												<LazyQuillEditor
-													id="work-reply-editor"
-													ref={replyQuill.quillRef}
-													theme="snow"
-													value={replyComment}
-													onChange={replyQuill.handleEditorChange}
-													modules={replyQuill.quillModules}
-													formats={replyQuill.quillFormats}
-												/>
-											</div>
-											<div className={styles.replyComposerFooter}>
-												<div className={`${styles.fileTileGrid} ${styles.replyComposerFiles}`}>
-													{replyFiles.map((fileItem, fileIndex) => renderSelectedFileTile(fileItem, `reply-${fileIndex}`, () => handleRemoveReplyFile(fileIndex)))}
-													<button type="button" className={`${styles.fileTile} ${styles.fileTileAdd}`} onClick={() => replyFileInputRef.current?.click()}>
-														<span className={styles.fileAddIcon}>+</span>
-														<span className={styles.fileNameLabel}>댓글 파일</span>
-													</button>
-												</div>
-												<div className={styles.replyComposerActions}>
-													<button type="button" className={`${styles.primaryButton} ${styles.replyComposerSubmitButton}`} onClick={() => void handleSaveReply()} disabled={isReplySaving}>
-														{isReplySaving ? "저장 중..." : "댓글 등록"}
-													</button>
-												</div>
-											</div>
-											<input ref={replyFileInputRef} type="file" multiple className={styles.hiddenFileInput} onChange={handleChangeReplyFiles} />
-										</div>
+										<WorkReplyComposer
+											key={`work-reply-create-${selectedDetail.workSeq}`}
+											mode="create"
+											workSeq={selectedDetail.workSeq}
+											initialHtml=""
+											isSubmitting={isReplySaving}
+											onSubmit={handleSaveReply}
+											onError={setMessage}
+											onPreviewImage={setPreviewImageUrl}
+											onDownloadFile={(fileItem) => void handleDownloadReplyFile(fileItem)}
+											onInlineImageUploadingChange={setIsReplyComposerImageUploading}
+										/>
 									</section>
 								</div>
 							) : null}
