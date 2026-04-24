@@ -16,6 +16,7 @@ interface GoogleIdConfiguration {
 	client_id: string;
 	callback: (response: GoogleCredentialResponse) => void;
 	ux_mode?: "popup" | "redirect";
+	use_fedcm_for_button?: boolean;
 }
 
 interface GoogleIdButtonConfiguration {
@@ -58,10 +59,13 @@ function initializeGoogleIdentityClient(clientId: string): void {
 		return;
 	}
 
+	// Chrome 계열에서는 FedCM 버튼 UX를 우선 사용해 COOP postMessage 경고를 줄입니다.
+	// FedCM을 지원하지 않는 브라우저는 기존 popup 흐름으로 자연스럽게 fallback 됩니다.
 	window.google?.accounts?.id.initialize({
 		client_id: clientId,
 		callback: handleGlobalGoogleCredentialResponse,
 		ux_mode: "popup",
+		use_fedcm_for_button: true,
 	});
 	initializedGoogleClientId = clientId;
 }
