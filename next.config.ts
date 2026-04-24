@@ -52,6 +52,23 @@ const nextConfig: NextConfig = {
             },
         ];
     },
+    /**
+     * react-resume.nextConfig.headers : 구글 로그인 팝업이 postMessage를 전달할 수 있도록 로그인 페이지 COOP를 완화합니다.
+     */
+    async headers() {
+        return [
+            {
+                // 스니펫 로그인 페이지에서만 Google GIS 팝업 연동을 허용합니다.
+                source: '/snippet/login',
+                headers: [
+                    {
+                        key: 'Cross-Origin-Opener-Policy',
+                        value: 'same-origin-allow-popups',
+                    },
+                ],
+            },
+        ];
+    },
 };
 
 export default nextConfig;
