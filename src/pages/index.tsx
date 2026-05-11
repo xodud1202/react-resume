@@ -28,6 +28,11 @@ const LANDING_MENU_BUTTON_LIST: LandingMenuButton[] = [
 		href: "/work",
 		description: "업무관리 화면으로 이동합니다.",
 	},
+	{
+		label: "휴가관리",
+		href: "/work/vacation",
+		description: "휴가관리 화면으로 이동합니다.",
+	},
 ];
 
 /**
