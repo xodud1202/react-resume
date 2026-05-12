@@ -142,6 +142,7 @@ function normalizeVacationBootstrapResponse(data: Partial<VacationBootstrapRespo
 function normalizeVacationListResponse(data: Partial<VacationListResponse> | null | undefined): VacationListResponse {
 	return {
 		selectedWorkCompanySeq: normalizeSelectedWorkCompanySeq(data?.selectedWorkCompanySeq),
+		companyList: resolveArrayValue(data?.companyList).map((companyItem) => normalizeVacationCompany(companyItem)),
 		yearList: normalizeVacationYearList(data?.yearList),
 		selectedYear: normalizeVacationSelectedYear(data?.selectedYear),
 		summaryList: resolveArrayValue(data?.summaryList).map((summaryItem) => normalizeVacationSummaryRow(summaryItem)),

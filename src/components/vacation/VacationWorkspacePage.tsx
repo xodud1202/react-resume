@@ -69,6 +69,7 @@ function createEmptyVacationCreateForm(): VacationCreateFormState {
 function createEmptyVacationListResponse(): VacationListResponse {
 	return {
 		selectedWorkCompanySeq: null,
+		companyList: [],
 		yearList: [],
 		selectedYear: null,
 		summaryList: [],
@@ -193,6 +194,12 @@ export default function VacationWorkspacePage() {
 	const vacationCodeList = useMemo(() => bootstrap?.vacationCodeList ?? [], [bootstrap]);
 	const favoritePersonList = useMemo(() => personList.filter((personItem) => personItem.favoriteYn === "Y"), [personList]);
 	const normalPersonList = useMemo(() => personList.filter((personItem) => personItem.favoriteYn !== "Y"), [personList]);
+	const filterCompanyList = useMemo(() => {
+		if (selectedPersonSeq !== null) {
+			return listResponse.companyList;
+		}
+		return listResponse.companyList.length > 0 ? listResponse.companyList : companyList;
+	}, [companyList, listResponse.companyList, selectedPersonSeq]);
 	const selectedPerson = useMemo(
 		() => personList.find((personItem) => personItem.personSeq === selectedPersonSeq) ?? null,
 		[personList, selectedPersonSeq],
@@ -283,12 +290,18 @@ export default function VacationWorkspacePage() {
 	// 전체 휴가자 필터를 선택합니다.
 	const handleClickAllPerson = async () => {
 		setSelectedPersonSeq(null);
+		setSelectedCompanySeq(null);
+		setSelectedVacationYear(null);
+		setListResponse(createEmptyVacationListResponse());
 		await loadVacationList(null, null, null, true);
 	};
 
 	// 휴가자 필터를 선택합니다.
 	const handleClickPerson = async (personSeq: number) => {
 		setSelectedPersonSeq(personSeq);
+		setSelectedCompanySeq(null);
+		setSelectedVacationYear(null);
+		setListResponse(createEmptyVacationListResponse());
 		await loadVacationList(personSeq, null, null, true);
 	};
 
@@ -492,16 +505,18 @@ export default function VacationWorkspacePage() {
 										))}
 									</select>
 								</label>
-								<label className={`${styles.companyRadio} ${selectedCompanySeq === null ? styles.companyRadioActive : ""}`}>
-									<input
-										type="radio"
-										name="vacation-company"
-										checked={selectedCompanySeq === null}
-										onChange={() => void handleChangeCompany(null)}
-									/>
-									<span>전체</span>
-								</label>
-								{companyList.map((companyItem) => (
+								{filterCompanyList.length > 0 ? (
+									<label className={`${styles.companyRadio} ${selectedCompanySeq === null ? styles.companyRadioActive : ""}`}>
+										<input
+											type="radio"
+											name="vacation-company"
+											checked={selectedCompanySeq === null}
+											onChange={() => void handleChangeCompany(null)}
+										/>
+										<span>전체</span>
+									</label>
+								) : null}
+								{filterCompanyList.map((companyItem) => (
 									<label
 										key={companyItem.workCompanySeq}
 										className={`${styles.companyRadio} ${selectedCompanySeq === companyItem.workCompanySeq ? styles.companyRadioActive : ""}`}

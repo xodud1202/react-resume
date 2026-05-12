@@ -108,6 +108,8 @@ export interface VacationListRow {
 export interface VacationListResponse {
 	// 현재 선택된 회사 번호입니다.
 	selectedWorkCompanySeq: number | null;
+	// 회사 필터에 노출할 휴가 등록 회사 목록입니다.
+	companyList: VacationCompanyOption[];
 	// 선택 가능한 휴가년도 목록입니다.
 	yearList: number[];
 	// 현재 선택된 휴가년도입니다.
