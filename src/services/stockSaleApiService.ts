@@ -1,5 +1,7 @@
 import type {
 	StockSaleBootstrapResponse,
+	StockSaleCreateRequest,
+	StockSaleCreateResponse,
 	StockSaleListFilter,
 	StockSaleListResponse,
 	StockSaleOption,
@@ -150,4 +152,12 @@ export async function fetchStockSaleList(filter: StockSaleListFilter): Promise<W
 		...result,
 		data: normalizeStockSaleListResponse(result.data),
 	};
+}
+
+// 매매일지 거래 이력을 등록합니다.
+export async function createStockSaleHistory(command: StockSaleCreateRequest): Promise<WorkClientApiResult<StockSaleCreateResponse>> {
+	return requestWorkClientApi<StockSaleCreateResponse>("/api/work/stock-sale-history", {
+		method: "POST",
+		body: command,
+	});
 }

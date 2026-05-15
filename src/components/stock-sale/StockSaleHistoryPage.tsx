@@ -1,21 +1,22 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, type CellClassParams, type ColDef, type ValueFormatterParams } from "ag-grid-community";
 import FeedbackLayer from "@/components/common/FeedbackLayer";
 import useFeedbackLayer from "@/components/common/useFeedbackLayer";
 import useResizableSplitLayout from "@/components/common/useResizableSplitLayout";
 import AdminDateInput from "@/components/work/AdminDateInput";
-import type { StockSaleBootstrapResponse, StockSaleListResponse, StockSaleOption, StockSaleRow, StockSaleSummaryRow } from "@/components/stock-sale/types";
-import { fetchStockSaleBootstrap, fetchStockSaleList } from "@/services/stockSaleApiService";
+import type { StockSaleBootstrapResponse, StockSaleCreateRequest, StockSaleListResponse, StockSaleOption, StockSaleRow, StockSaleSummaryRow } from "@/components/stock-sale/types";
+import { createStockSaleHistory, fetchStockSaleBootstrap, fetchStockSaleList } from "@/services/stockSaleApiService";
 import { logoutWork, refreshWorkSession } from "@/services/workApiService";
 import styles from "./StockSaleHistoryPage.module.css";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 const STOCK_SALE_PAGE_PATH = "/work/stock";
-const STOCK_SALE_PAGE_SIZE = 20;
+const STOCK_SALE_GRID_PAGE_SIZE = 20;
+const STOCK_SALE_FETCH_PAGE_SIZE = 10000;
 const ACCOUNT_FAVORITE_STORAGE_KEY = "react-resume:stock-sale:favorite-account-codes";
 const STOCK_FAVORITE_STORAGE_KEY = "react-resume:stock-sale:favorite-stock-codes";
 
@@ -32,6 +33,25 @@ interface OptionButtonListProps {
 	onToggleSelect: (code: string) => void;
 	// 즐겨찾기 토글 콜백입니다.
 	onToggleFavorite: (code: string) => void;
+	// 선택 해제 콜백입니다.
+	onClearSelect: () => void;
+}
+
+interface StockSaleCreateFormState {
+	// 매매일자입니다.
+	saleDt: string;
+	// 거래 계좌 코드입니다.
+	stockAccountCd: string;
+	// 거래 주식 코드입니다.
+	stockNmCd: string;
+	// 매매수 입력값입니다.
+	saleCnt: string;
+	// 매매금액 입력값입니다.
+	saleAmt: string;
+	// 손익금액 입력값입니다.
+	profitAmt: string;
+	// 메모 입력값입니다.
+	memo: string;
 }
 
 // returnUrl을 업무 하위 경로로만 제한합니다.
@@ -51,7 +71,7 @@ function createEmptyStockSaleListResponse(): StockSaleListResponse {
 		rowList: [],
 		totalCount: 0,
 		pageNo: 1,
-		pageSize: STOCK_SALE_PAGE_SIZE,
+		pageSize: STOCK_SALE_GRID_PAGE_SIZE,
 		totalPageCount: 0,
 	};
 }
@@ -117,6 +137,54 @@ function buildSortedOptionList(optionList: StockSaleOption[], favoriteCodeSet: S
 			}
 			return firstItem.cdNm.localeCompare(secondItem.cdNm, "ko");
 		});
+}
+
+// 즐겨찾기된 유효 옵션 코드만 노출 순서대로 선택 목록으로 변환합니다.
+function buildSelectedFavoriteCodeList(optionList: StockSaleOption[], favoriteCodeSet: Set<string>): string[] {
+	return buildSortedOptionList(optionList, favoriteCodeSet)
+		.filter((optionItem) => optionItem.favoriteYn === "Y")
+		.map((optionItem) => optionItem.cd);
+}
+
+// 오늘 날짜를 date input 값으로 생성합니다.
+function getTodayDateInputValue(): string {
+	const now = new Date();
+	const year = now.getFullYear();
+	const month = String(now.getMonth() + 1).padStart(2, "0");
+	const day = String(now.getDate()).padStart(2, "0");
+	return `${year}-${month}-${day}`;
+}
+
+// 문자열 숫자 입력값을 정수로 변환합니다.
+function parseIntegerInputValue(value: string): number | null {
+	const normalizedValue = value.trim();
+	if (normalizedValue === "") {
+		return null;
+	}
+	const parsedValue = Number(normalizedValue);
+	if (!Number.isFinite(parsedValue) || !Number.isInteger(parsedValue)) {
+		return null;
+	}
+	return parsedValue;
+}
+
+// 등록 폼 상태를 API 요청 값으로 변환합니다.
+function buildStockSaleCreateRequest(formState: StockSaleCreateFormState): StockSaleCreateRequest | null {
+	const saleCnt = parseIntegerInputValue(formState.saleCnt);
+	const saleAmt = parseIntegerInputValue(formState.saleAmt);
+	const profitAmt = parseIntegerInputValue(formState.profitAmt);
+	if (formState.saleDt.trim() === "" || formState.stockAccountCd.trim() === "" || formState.stockNmCd.trim() === "" || !saleCnt || saleAmt === null || profitAmt === null) {
+		return null;
+	}
+	return {
+		saleDt: formState.saleDt,
+		stockAccountCd: formState.stockAccountCd,
+		stockNmCd: formState.stockNmCd,
+		saleCnt,
+		saleAmt,
+		profitAmt,
+		memo: formState.memo,
+	};
 }
 
 // 금액을 천 단위 문자열로 변환합니다.
@@ -189,12 +257,18 @@ function OptionButtonList({
 	favoriteCodeSet,
 	onToggleSelect,
 	onToggleFavorite,
+	onClearSelect,
 }: OptionButtonListProps) {
 	return (
 		<section className={styles.filterSection}>
 			<div className={styles.sectionTitleRow}>
 				<h2 className={styles.sectionTitle}>{title}</h2>
-				<span className={styles.sectionCount}>{selectedCodeList.length}</span>
+				<div className={styles.optionSectionActions}>
+					<button type="button" className={styles.clearSelectButton} onClick={onClearSelect} disabled={selectedCodeList.length < 1}>
+						선택 해제
+					</button>
+					<span className={styles.sectionCount}>{selectedCodeList.length}</span>
+				</div>
 			</div>
 			<div className={styles.optionList}>
 				{optionList.map((optionItem) => {
@@ -233,10 +307,12 @@ export default function StockSaleHistoryPage() {
 		collapseBreakpoint: 1024,
 		primaryWidthCssVar: "--stock-sale-sidebar-width",
 	});
-	const { successMessage, isSuccessVisible, errorMessage, showError, clearError } = useFeedbackLayer();
+	const { successMessage, isSuccessVisible, errorMessage, showSuccess, showError, clearError } = useFeedbackLayer();
 	const [isInitializing, setIsInitializing] = useState(true);
 	const [isListLoading, setIsListLoading] = useState(false);
 	const [isActionPending, setIsActionPending] = useState(false);
+	const [isCreateLayerOpen, setIsCreateLayerOpen] = useState(false);
+	const [isCreateSaving, setIsCreateSaving] = useState(false);
 	const [bootstrap, setBootstrap] = useState<StockSaleBootstrapResponse | null>(null);
 	const [listResponse, setListResponse] = useState<StockSaleListResponse>(createEmptyStockSaleListResponse);
 	const [startSaleDt, setStartSaleDt] = useState("");
@@ -245,6 +321,16 @@ export default function StockSaleHistoryPage() {
 	const [selectedStockCodeList, setSelectedStockCodeList] = useState<string[]>([]);
 	const [favoriteAccountCodeSet, setFavoriteAccountCodeSet] = useState<Set<string>>(() => new Set<string>());
 	const [favoriteStockCodeSet, setFavoriteStockCodeSet] = useState<Set<string>>(() => new Set<string>());
+	const [showHoldingOnly, setShowHoldingOnly] = useState(true);
+	const [createFormState, setCreateFormState] = useState<StockSaleCreateFormState>({
+		saleDt: getTodayDateInputValue(),
+		stockAccountCd: "",
+		stockNmCd: "",
+		saleCnt: "",
+		saleAmt: "",
+		profitAmt: "0",
+		memo: "",
+	});
 
 	const accountOptionList = useMemo(
 		() => buildSortedOptionList(bootstrap?.accountList ?? [], favoriteAccountCodeSet),
@@ -258,19 +344,24 @@ export default function StockSaleHistoryPage() {
 		? "매매일지 화면을 준비하고 있습니다."
 		: isActionPending
 			? "요청을 처리하고 있습니다."
-			: isListLoading
-				? "매매일지 목록을 불러오고 있습니다."
-				: "";
+			: isCreateSaving
+				? "매매일지를 등록하고 있습니다."
+				: isListLoading
+					? "매매일지 목록을 불러오고 있습니다."
+					: "";
 	const totalInvestmentAmount = useMemo(
 		() => listResponse.summaryList.reduce((sum, summaryItem) => sum + summaryItem.saleAmt, 0),
 		[listResponse.summaryList],
 	);
+	const visibleSummaryList = useMemo(
+		() => (showHoldingOnly ? listResponse.summaryList.filter((summaryItem) => summaryItem.saleCnt !== 0) : listResponse.summaryList),
+		[listResponse.summaryList, showHoldingOnly],
+	);
 	const summaryColumnDefs = useMemo<ColDef<StockSaleSummaryRow>[]>(() => [
 		{
-			headerName: "주식명",
+			headerName: "거래주식",
 			field: "stockNm",
-			minWidth: 220,
-			flex: 1.4,
+			width: 300,
 			headerClass: styles.centerHeader,
 			cellClass: styles.centerCell,
 			sortable: false,
@@ -278,7 +369,7 @@ export default function StockSaleHistoryPage() {
 		{
 			headerName: "주식수",
 			field: "saleCnt",
-			minWidth: 112,
+			width: 80,
 			type: "numericColumn",
 			headerClass: styles.centerHeader,
 			valueFormatter: formatSummaryGridNumber,
@@ -286,9 +377,9 @@ export default function StockSaleHistoryPage() {
 			sortable: false,
 		},
 		{
-			headerName: "매매금액(합계)",
+			headerName: "매매금액",
 			field: "saleAmt",
-			minWidth: 150,
+			width: 150,
 			type: "numericColumn",
 			headerClass: styles.centerHeader,
 			valueFormatter: formatSummaryGridNumber,
@@ -298,7 +389,7 @@ export default function StockSaleHistoryPage() {
 		{
 			headerName: "매매평단",
 			field: "averageSaleAmt",
-			minWidth: 130,
+			width: 150,
 			type: "numericColumn",
 			headerClass: styles.centerHeader,
 			valueFormatter: formatSummaryAverageAmount,
@@ -308,7 +399,7 @@ export default function StockSaleHistoryPage() {
 		{
 			headerName: "손익합계",
 			field: "profitAmt",
-			minWidth: 130,
+			width: 150,
 			type: "numericColumn",
 			headerClass: styles.centerHeader,
 			valueFormatter: formatSummaryGridNumber,
@@ -320,7 +411,7 @@ export default function StockSaleHistoryPage() {
 		{
 			headerName: "매매일시",
 			field: "saleDt",
-			minWidth: 116,
+			width: 150,
 			headerClass: styles.centerHeader,
 			cellClass: styles.centerCell,
 			sortable: false,
@@ -328,8 +419,7 @@ export default function StockSaleHistoryPage() {
 		{
 			headerName: "거래계좌",
 			field: "stockAccountNm",
-			minWidth: 170,
-			flex: 1,
+			width: 200,
 			headerClass: styles.centerHeader,
 			cellClass: styles.centerCell,
 			sortable: false,
@@ -337,8 +427,7 @@ export default function StockSaleHistoryPage() {
 		{
 			headerName: "거래주식",
 			field: "stockNm",
-			minWidth: 220,
-			flex: 1.35,
+			width: 300,
 			headerClass: styles.centerHeader,
 			cellClass: styles.centerCell,
 			sortable: false,
@@ -346,7 +435,7 @@ export default function StockSaleHistoryPage() {
 		{
 			headerName: "거래수",
 			field: "saleCnt",
-			minWidth: 104,
+			width: 80,
 			type: "numericColumn",
 			headerClass: styles.centerHeader,
 			valueFormatter: formatGridNumber,
@@ -356,7 +445,7 @@ export default function StockSaleHistoryPage() {
 		{
 			headerName: "거래금액",
 			field: "saleAmt",
-			minWidth: 128,
+			width: 150,
 			type: "numericColumn",
 			headerClass: styles.centerHeader,
 			valueFormatter: formatGridNumber,
@@ -366,7 +455,7 @@ export default function StockSaleHistoryPage() {
 		{
 			headerName: "손익",
 			field: "profitAmt",
-			minWidth: 118,
+			width: 150,
 			type: "numericColumn",
 			headerClass: styles.centerHeader,
 			valueFormatter: formatGridNumber,
@@ -376,8 +465,7 @@ export default function StockSaleHistoryPage() {
 		{
 			headerName: "메모",
 			field: "memo",
-			minWidth: 220,
-			flex: 1.6,
+			width: 300,
 			headerClass: styles.centerHeader,
 			cellClass: styles.leftCell,
 			sortable: false,
@@ -400,7 +488,7 @@ export default function StockSaleHistoryPage() {
 				stockAccountCdList: nextAccountCodeList,
 				stockNmCdList: nextStockCodeList,
 				pageNo: nextPageNo,
-				pageSize: STOCK_SALE_PAGE_SIZE,
+				pageSize: STOCK_SALE_FETCH_PAGE_SIZE,
 			});
 			if (!result.ok || !result.data) {
 				showError(result.message || "매매일지 목록을 불러오지 못했습니다.");
@@ -434,10 +522,16 @@ export default function StockSaleHistoryPage() {
 				if (isCancelled) {
 					return;
 				}
-				setFavoriteAccountCodeSet(readFavoriteCodeSet(ACCOUNT_FAVORITE_STORAGE_KEY));
-				setFavoriteStockCodeSet(readFavoriteCodeSet(STOCK_FAVORITE_STORAGE_KEY));
+				const nextFavoriteAccountCodeSet = readFavoriteCodeSet(ACCOUNT_FAVORITE_STORAGE_KEY);
+				const nextFavoriteStockCodeSet = readFavoriteCodeSet(STOCK_FAVORITE_STORAGE_KEY);
+				const nextSelectedAccountCodeList = buildSelectedFavoriteCodeList(bootstrapResult.data.accountList, nextFavoriteAccountCodeSet);
+				const nextSelectedStockCodeList = buildSelectedFavoriteCodeList(bootstrapResult.data.stockList, nextFavoriteStockCodeSet);
+				setFavoriteAccountCodeSet(nextFavoriteAccountCodeSet);
+				setFavoriteStockCodeSet(nextFavoriteStockCodeSet);
+				setSelectedAccountCodeList(nextSelectedAccountCodeList);
+				setSelectedStockCodeList(nextSelectedStockCodeList);
 				setBootstrap(bootstrapResult.data);
-				await loadStockSaleList(1, "", "", [], []);
+				await loadStockSaleList(1, "", "", nextSelectedAccountCodeList, nextSelectedStockCodeList);
 			} finally {
 				if (!isCancelled) {
 					setIsInitializing(false);
@@ -497,29 +591,76 @@ export default function StockSaleHistoryPage() {
 		});
 	};
 
-	// 검색 조건을 초기화하고 전체 목록을 조회합니다.
-	const handleReset = () => {
-		setStartSaleDt("");
-		setEndSaleDt("");
+	// 보유주식만 보기 옵션을 변경합니다.
+	const handleShowHoldingOnlyChange = (event: ChangeEvent<HTMLInputElement>) => {
+		setShowHoldingOnly(event.target.checked);
+	};
+
+	// 계좌 선택 조건을 해제하고 목록을 조회합니다.
+	const handleClearAccountSelect = () => {
 		setSelectedAccountCodeList([]);
+		void loadStockSaleList(1, startSaleDt, endSaleDt, [], selectedStockCodeList);
+	};
+
+	// 주식 선택 조건을 해제하고 목록을 조회합니다.
+	const handleClearStockSelect = () => {
 		setSelectedStockCodeList([]);
-		void loadStockSaleList(1, "", "", [], []);
+		void loadStockSaleList(1, startSaleDt, endSaleDt, selectedAccountCodeList, []);
 	};
 
-	// 이전 페이지를 조회합니다.
-	const handlePreviousPage = () => {
-		if (listResponse.pageNo <= 1) {
-			return;
-		}
-		void loadStockSaleList(listResponse.pageNo - 1, startSaleDt, endSaleDt, selectedAccountCodeList, selectedStockCodeList);
+	// 매매등록 레이어를 열고 기본 입력값을 채웁니다.
+	const handleOpenCreateLayer = () => {
+		setCreateFormState({
+			saleDt: getTodayDateInputValue(),
+			stockAccountCd: selectedAccountCodeList[0] ?? accountOptionList[0]?.cd ?? "",
+			stockNmCd: selectedStockCodeList[0] ?? stockOptionList[0]?.cd ?? "",
+			saleCnt: "",
+			saleAmt: "",
+			profitAmt: "0",
+			memo: "",
+		});
+		setIsCreateLayerOpen(true);
 	};
 
-	// 다음 페이지를 조회합니다.
-	const handleNextPage = () => {
-		if (listResponse.totalPageCount > 0 && listResponse.pageNo >= listResponse.totalPageCount) {
+	// 매매등록 레이어를 닫습니다.
+	const handleCloseCreateLayer = () => {
+		if (isCreateSaving) {
 			return;
 		}
-		void loadStockSaleList(listResponse.pageNo + 1, startSaleDt, endSaleDt, selectedAccountCodeList, selectedStockCodeList);
+		setIsCreateLayerOpen(false);
+	};
+
+	// 매매등록 입력값을 갱신합니다.
+	const handleCreateFormChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+		const { name, value } = event.target;
+		setCreateFormState((prevState) => ({
+			...prevState,
+			[name]: value,
+		}));
+	};
+
+	// 매매일지 거래 이력을 저장하고 현재 검색 조건으로 목록을 다시 조회합니다.
+	const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		const command = buildStockSaleCreateRequest(createFormState);
+		if (!command) {
+			showError("매매등록 입력값을 확인해주세요.");
+			return;
+		}
+
+		setIsCreateSaving(true);
+		try {
+			const result = await createStockSaleHistory(command);
+			if (!result.ok) {
+				showError(result.message || "매매일지 등록에 실패했습니다.");
+				return;
+			}
+			setIsCreateLayerOpen(false);
+			showSuccess(result.data?.message || "매매일지를 등록했습니다.");
+			await loadStockSaleList(1, startSaleDt, endSaleDt, selectedAccountCodeList, selectedStockCodeList);
+		} finally {
+			setIsCreateSaving(false);
+		}
 	};
 
 	// 업무 세션을 종료하고 로그인 화면으로 이동합니다.
@@ -575,6 +716,7 @@ export default function StockSaleHistoryPage() {
 								favoriteCodeSet={favoriteAccountCodeSet}
 								onToggleSelect={handleToggleAccountSelect}
 								onToggleFavorite={handleToggleAccountFavorite}
+								onClearSelect={handleClearAccountSelect}
 							/>
 
 							<OptionButtonList
@@ -584,12 +726,13 @@ export default function StockSaleHistoryPage() {
 								favoriteCodeSet={favoriteStockCodeSet}
 								onToggleSelect={handleToggleStockSelect}
 								onToggleFavorite={handleToggleStockFavorite}
+								onClearSelect={handleClearStockSelect}
 							/>
 						</div>
 
 						<div className={styles.sidebarActions}>
-							<button type="button" className={styles.secondaryButton} onClick={handleReset} disabled={isListLoading || isInitializing}>
-								초기화
+							<button type="button" className={styles.secondaryButton} onClick={handleOpenCreateLayer} disabled={isCreateSaving}>
+								매매등록
 							</button>
 							<button type="button" className={styles.ghostButton} onClick={handleLogout} disabled={isActionPending}>
 								로그아웃
@@ -621,11 +764,17 @@ export default function StockSaleHistoryPage() {
 									<p className={styles.eyebrow}>summary</p>
 									<h2 className={styles.contentTitle}>종목별 합계</h2>
 								</div>
-								<p className={styles.metricValue}>{formatNumber(totalInvestmentAmount)}</p>
+								<div className={styles.summaryHeaderActions}>
+									<p className={styles.metricValue}>{formatNumber(totalInvestmentAmount)}</p>
+									<label className={styles.holdingOnlyControl}>
+										<input type="checkbox" checked={showHoldingOnly} onChange={handleShowHoldingOnlyChange} />
+										<span>보유주식만보기</span>
+									</label>
+								</div>
 							</div>
 							<div className={`ag-theme-quartz-dark ${styles.darkAgGrid} ${styles.summaryAgGridShell}`}>
 								<AgGridReact<StockSaleSummaryRow>
-									rowData={listResponse.summaryList}
+									rowData={visibleSummaryList}
 									columnDefs={summaryColumnDefs}
 									getRowId={(params) => params.data.stockNmCd}
 									theme="legacy"
@@ -645,20 +794,6 @@ export default function StockSaleHistoryPage() {
 								</div>
 								<div className={styles.paginationControls}>
 									<p className={styles.listCount}>상세 {formatNumber(listResponse.totalCount)}건</p>
-									<button type="button" className={styles.pageButton} onClick={handlePreviousPage} disabled={listResponse.pageNo <= 1 || isListLoading}>
-										이전
-									</button>
-									<span className={styles.pageStatus}>
-										{listResponse.pageNo} / {Math.max(listResponse.totalPageCount, 1)}
-									</span>
-									<button
-										type="button"
-										className={styles.pageButton}
-										onClick={handleNextPage}
-										disabled={listResponse.totalPageCount < 1 || listResponse.pageNo >= listResponse.totalPageCount || isListLoading}
-									>
-										다음
-									</button>
 								</div>
 							</div>
 							<div className={`ag-theme-quartz-dark ${styles.darkAgGrid} ${styles.agGridShell}`}>
@@ -669,6 +804,9 @@ export default function StockSaleHistoryPage() {
 									theme="legacy"
 									rowHeight={42}
 									headerHeight={42}
+									pagination
+									paginationPageSize={STOCK_SALE_GRID_PAGE_SIZE}
+									paginationPageSizeSelector={[20, 50, 100]}
 									suppressCellFocus
 									overlayNoRowsTemplate="검색 결과가 없습니다."
 								/>
@@ -678,11 +816,77 @@ export default function StockSaleHistoryPage() {
 				</div>
 			</div>
 
+			{isCreateLayerOpen ? (
+				<div className={styles.modalBackdrop} role="dialog" aria-modal="true" aria-labelledby="stockSaleCreateTitle">
+					<form className={styles.createModal} onSubmit={handleCreateSubmit}>
+						<div className={styles.modalHeader}>
+							<div>
+								<p className={styles.eyebrow}>register</p>
+								<h2 id="stockSaleCreateTitle" className={styles.contentTitle}>매매등록</h2>
+							</div>
+							<button type="button" className={styles.modalCloseButton} onClick={handleCloseCreateLayer} disabled={isCreateSaving} aria-label="매매등록 닫기">
+								×
+							</button>
+						</div>
+
+						<div className={styles.createFormGrid}>
+							<label className={styles.fieldLabel}>
+								날짜
+								<AdminDateInput name="saleDt" value={createFormState.saleDt} onChange={handleCreateFormChange} disabled={isCreateSaving} />
+							</label>
+							<label className={styles.fieldLabel}>
+								계좌
+								<select name="stockAccountCd" className={styles.formControl} value={createFormState.stockAccountCd} onChange={handleCreateFormChange} disabled={isCreateSaving}>
+									<option value="">선택</option>
+									{accountOptionList.map((optionItem) => (
+										<option key={optionItem.cd} value={optionItem.cd}>{optionItem.cdNm}</option>
+									))}
+								</select>
+							</label>
+							<label className={styles.fieldLabel}>
+								주식명
+								<select name="stockNmCd" className={styles.formControl} value={createFormState.stockNmCd} onChange={handleCreateFormChange} disabled={isCreateSaving}>
+									<option value="">선택</option>
+									{stockOptionList.map((optionItem) => (
+										<option key={optionItem.cd} value={optionItem.cd}>{optionItem.cdNm}</option>
+									))}
+								</select>
+							</label>
+							<label className={styles.fieldLabel}>
+								매매수
+								<input name="saleCnt" className={styles.formControl} type="number" step="1" value={createFormState.saleCnt} onChange={handleCreateFormChange} disabled={isCreateSaving} />
+							</label>
+							<label className={styles.fieldLabel}>
+								매매금액
+								<input name="saleAmt" className={styles.formControl} type="number" step="1" value={createFormState.saleAmt} onChange={handleCreateFormChange} disabled={isCreateSaving} />
+							</label>
+							<label className={styles.fieldLabel}>
+								손익금액
+								<input name="profitAmt" className={styles.formControl} type="number" step="1" value={createFormState.profitAmt} onChange={handleCreateFormChange} disabled={isCreateSaving} />
+							</label>
+							<label className={`${styles.fieldLabel} ${styles.memoField}`}>
+								메모
+								<textarea name="memo" className={`${styles.formControl} ${styles.memoControl}`} value={createFormState.memo} onChange={handleCreateFormChange} disabled={isCreateSaving} maxLength={300} />
+							</label>
+						</div>
+
+						<div className={styles.modalActions}>
+							<button type="button" className={styles.ghostButton} onClick={handleCloseCreateLayer} disabled={isCreateSaving}>
+								취소
+							</button>
+							<button type="submit" className={styles.secondaryButton} disabled={isCreateSaving}>
+								등록
+							</button>
+						</div>
+					</form>
+				</div>
+			) : null}
+
 			<FeedbackLayer
 				successMessage={successMessage}
 				isSuccessVisible={isSuccessVisible}
 				errorMessage={errorMessage}
-				loadingVisible={isInitializing || isListLoading || isActionPending}
+				loadingVisible={isInitializing || isListLoading || isActionPending || isCreateSaving}
 				loadingMessage={blockingLoadingMessage}
 				onErrorClose={clearError}
 			/>

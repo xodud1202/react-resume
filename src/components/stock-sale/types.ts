@@ -32,6 +32,30 @@ export interface StockSaleListFilter {
 	pageSize?: number;
 }
 
+// 매매일지 거래 등록 요청을 정의합니다.
+export interface StockSaleCreateRequest {
+	// 매매일자입니다.
+	saleDt: string;
+	// 거래 계좌 코드입니다.
+	stockAccountCd: string;
+	// 거래 주식 코드입니다.
+	stockNmCd: string;
+	// 매매수입니다.
+	saleCnt: number;
+	// 매매금액입니다.
+	saleAmt: number;
+	// 손익금액입니다.
+	profitAmt: number;
+	// 메모입니다.
+	memo: string;
+}
+
+// 매매일지 거래 등록 응답을 정의합니다.
+export interface StockSaleCreateResponse {
+	// 처리 메시지입니다.
+	message: string;
+}
+
 // 종목별 합계 행을 정의합니다.
 export interface StockSaleSummaryRow {
 	// 주식 코드입니다.
