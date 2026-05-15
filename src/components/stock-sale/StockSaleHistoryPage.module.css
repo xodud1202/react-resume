@@ -1,0 +1,476 @@
+.pageShell {
+	--stock-sale-bg: #07100f;
+	--stock-sale-panel: rgba(13, 24, 23, 0.95);
+	--stock-sale-panel-strong: #111f1d;
+	--stock-sale-border: rgba(148, 163, 184, 0.2);
+	--stock-sale-border-strong: rgba(148, 163, 184, 0.36);
+	--stock-sale-ink: #f5fbf8;
+	--stock-sale-muted: rgba(226, 232, 240, 0.72);
+	--stock-sale-accent: #2dd4bf;
+	--stock-sale-accent-strong: #14b8a6;
+	--stock-sale-danger: #60a5fa;
+	--stock-sale-positive: #fb7185;
+	min-height: 100vh;
+	padding: 1rem;
+	background:
+		linear-gradient(135deg, rgba(45, 212, 191, 0.08), transparent 32%),
+		linear-gradient(180deg, #050908 0%, #081210 50%, #050807 100%);
+	color: var(--stock-sale-ink);
+}
+
+.workspaceShell {
+	--workspace-gap: 1rem;
+	--stock-sale-sidebar-width: 340px;
+	display: grid;
+	grid-template-columns: var(--stock-sale-sidebar-width) minmax(0, 1fr);
+	gap: var(--workspace-gap);
+	align-items: start;
+	position: relative;
+}
+
+.resizeHandle {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: calc(var(--stock-sale-sidebar-width) + (var(--workspace-gap) / 2));
+	z-index: 5;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	padding: 0;
+	transform: translateX(-50%);
+	background: transparent;
+	border: 0;
+	cursor: col-resize;
+	touch-action: none;
+	outline: none;
+}
+
+.resizeHandleGrip {
+	display: block;
+	width: 4px;
+	height: 76px;
+	border-radius: 999px;
+	background: rgba(148, 163, 184, 0.26);
+	transition:
+		background 0.14s ease,
+		height 0.14s ease;
+}
+
+.resizeHandle:hover .resizeHandleGrip,
+.resizeHandle:focus-visible .resizeHandleGrip,
+.resizeHandleActive .resizeHandleGrip {
+	height: 108px;
+	background: rgba(45, 212, 191, 0.72);
+}
+
+.sidebar,
+.contentPanel,
+.metricPanel,
+.summaryPanel,
+.gridPanel {
+	border: 1px solid var(--stock-sale-border);
+	border-radius: 14px;
+	background: var(--stock-sale-panel);
+	box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+	backdrop-filter: blur(18px);
+}
+
+.sidebar {
+	position: sticky;
+	top: 1rem;
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr) auto;
+	gap: 1rem;
+	height: calc(100vh - 2rem);
+	padding: 1rem;
+	min-width: 0;
+}
+
+.contentPanel {
+	display: grid;
+	gap: 1rem;
+	min-width: 0;
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+	backdrop-filter: none;
+}
+
+.metricPanel,
+.summaryPanel,
+.gridPanel {
+	display: grid;
+	gap: 0.9rem;
+	min-width: 0;
+	padding: 1rem;
+}
+
+.metricPanel {
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	background: linear-gradient(135deg, rgba(45, 212, 191, 0.14), rgba(15, 23, 42, 0.46));
+}
+
+.gridPanel {
+	min-height: calc(100vh - 25rem);
+}
+
+.sidebarHeader,
+.contentHeader,
+.sectionTitleRow,
+.sidebarActions,
+.paginationControls {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.sidebarHeader,
+.contentHeader,
+.sectionTitleRow {
+	justify-content: space-between;
+}
+
+.sidebarHeader {
+	align-items: flex-start;
+}
+
+.eyebrow,
+.sidebarMeta,
+.emptyText,
+.listCount,
+.pageStatus {
+	margin: 0;
+	color: var(--stock-sale-muted);
+}
+
+.eyebrow {
+	font-size: 0.72rem;
+	font-weight: 800;
+	letter-spacing: 0;
+	text-transform: uppercase;
+	color: var(--stock-sale-accent);
+}
+
+.sidebarTitle,
+.contentTitle,
+.sectionTitle {
+	margin: 0;
+	letter-spacing: 0;
+}
+
+.sidebarTitle {
+	font-size: 1.42rem;
+}
+
+.contentTitle {
+	font-size: 1.12rem;
+}
+
+.sidebarMeta,
+.listCount,
+.pageStatus {
+	font-size: 0.84rem;
+}
+
+.metricValue {
+	margin: 0;
+	color: var(--stock-sale-ink);
+	font-size: clamp(1.45rem, 2vw, 2.15rem);
+	font-weight: 900;
+	line-height: 1;
+	text-align: right;
+}
+
+.filterScrollArea {
+	display: flex;
+	flex-direction: column;
+	gap: 0.9rem;
+	min-height: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+	padding-right: 0.15rem;
+}
+
+.filterSection {
+	display: grid;
+	gap: 0.6rem;
+	min-width: 0;
+}
+
+.sectionTitle {
+	font-size: 0.86rem;
+	color: var(--stock-sale-muted);
+}
+
+.sectionCount {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 1.75rem;
+	height: 1.5rem;
+	border: 1px solid var(--stock-sale-border);
+	border-radius: 999px;
+	font-size: 0.75rem;
+	font-weight: 800;
+	color: var(--stock-sale-ink);
+}
+
+.dateGrid {
+	display: grid;
+	gap: 0.55rem;
+}
+
+.fieldLabel {
+	display: grid;
+	gap: 0.35rem;
+	font-size: 0.78rem;
+	font-weight: 800;
+	color: var(--stock-sale-muted);
+}
+
+.optionList {
+	display: grid;
+	gap: 0.45rem;
+	min-width: 0;
+}
+
+.optionButtonShell {
+	display: grid;
+	grid-template-columns: 2.35rem minmax(0, 1fr);
+	align-items: stretch;
+	min-height: 2.35rem;
+	border: 1px solid var(--stock-sale-border);
+	border-radius: 8px;
+	overflow: hidden;
+	background: rgba(15, 23, 42, 0.3);
+	transition:
+		border-color 0.14s ease,
+		background 0.14s ease;
+}
+
+.optionButtonShellSelected {
+	border-color: rgba(45, 212, 191, 0.76);
+	background: rgba(45, 212, 191, 0.12);
+}
+
+.favoriteButton,
+.optionButton,
+.primaryButton,
+.secondaryButton,
+.ghostButton,
+.pageButton {
+	border: 0;
+	color: var(--stock-sale-ink);
+	cursor: pointer;
+	transition:
+		background 0.14s ease,
+		color 0.14s ease,
+		border-color 0.14s ease;
+}
+
+.favoriteButton,
+.optionButton {
+	background: transparent;
+}
+
+.favoriteButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-right: 1px solid var(--stock-sale-border);
+	color: rgba(226, 232, 240, 0.58);
+	font-size: 1rem;
+}
+
+.favoriteButtonActive {
+	color: #facc15;
+}
+
+.optionButton {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	padding: 0 0.75rem;
+	text-align: left;
+}
+
+.optionButtonShell:hover {
+	border-color: var(--stock-sale-border-strong);
+	background: rgba(45, 212, 191, 0.08);
+}
+
+.optionLabel {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: 0.86rem;
+	font-weight: 800;
+}
+
+.sidebarActions {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 0.55rem;
+}
+
+.primaryButton,
+.secondaryButton,
+.ghostButton,
+.pageButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 2.45rem;
+	border-radius: 8px;
+	padding: 0 0.9rem;
+	font-weight: 800;
+}
+
+.primaryButton {
+	background: var(--stock-sale-accent);
+	color: #06201d;
+}
+
+.primaryButton:hover {
+	background: var(--stock-sale-accent-strong);
+}
+
+.secondaryButton,
+.ghostButton,
+.pageButton {
+	border: 1px solid var(--stock-sale-border);
+	background: rgba(15, 23, 42, 0.32);
+}
+
+.secondaryButton:hover,
+.ghostButton:hover,
+.pageButton:hover {
+	border-color: var(--stock-sale-border-strong);
+	background: rgba(45, 212, 191, 0.09);
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.ghostButton:disabled,
+.pageButton:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
+.positiveAmount {
+	color: var(--stock-sale-positive);
+}
+
+.negativeAmount {
+	color: var(--stock-sale-danger);
+}
+
+.centerHeader :global(.ag-header-cell-label) {
+	justify-content: center;
+}
+
+.centerCell {
+	text-align: center;
+}
+
+.leftCell {
+	text-align: left;
+}
+
+.rightCell {
+	text-align: right;
+}
+
+.paginationControls {
+	flex-wrap: wrap;
+	justify-content: flex-end;
+}
+
+.pageButton {
+	min-height: 2.1rem;
+	padding: 0 0.75rem;
+}
+
+.summaryAgGridShell,
+.agGridShell {
+	min-width: 0;
+}
+
+.darkAgGrid {
+	--ag-background-color: rgba(15, 23, 42, 0.18);
+	--ag-foreground-color: var(--stock-sale-ink);
+	--ag-header-background-color: rgba(2, 6, 23, 0.95);
+	--ag-header-foreground-color: var(--stock-sale-muted);
+	--ag-border-color: var(--stock-sale-border);
+	--ag-row-hover-color: rgba(45, 212, 191, 0.08);
+	--ag-odd-row-background-color: rgba(2, 6, 23, 0.42);
+	--ag-font-family: inherit;
+	--ag-wrapper-border-radius: 8px;
+	--ag-selected-row-background-color: rgba(45, 212, 191, 0.14);
+}
+
+.summaryAgGridShell {
+	height: clamp(12rem, 25vh, 20rem);
+	min-height: 12rem;
+}
+
+.agGridShell {
+	height: clamp(22rem, calc(100vh - 34rem), 44rem);
+	min-height: 20rem;
+}
+
+.emptyText {
+	grid-column: 1 / -1;
+	padding: 1rem;
+	border: 1px dashed var(--stock-sale-border);
+	border-radius: 8px;
+	text-align: center;
+}
+
+@media (max-width: 1024px) {
+	.pageShell {
+		padding: 0.75rem;
+	}
+
+	.workspaceShell {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.sidebar {
+		position: static;
+		height: auto;
+		max-height: none;
+	}
+
+	.filterScrollArea {
+		max-height: none;
+		overflow: visible;
+	}
+
+	.contentHeader {
+		align-items: flex-start;
+		flex-direction: column;
+	}
+
+	.metricPanel {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.metricValue {
+		text-align: left;
+	}
+
+	.paginationControls {
+		width: 100%;
+		justify-content: flex-start;
+	}
+}
+
+@media (max-width: 640px) {
+	.metricValue {
+		font-size: 1.35rem;
+	}
+}
