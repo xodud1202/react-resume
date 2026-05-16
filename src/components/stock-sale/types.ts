@@ -56,6 +56,32 @@ export interface StockSaleCreateResponse {
 	message: string;
 }
 
+// 매매일지 선택 항목 노출순서 저장 대상입니다.
+export interface StockSaleDisplayOrderItem {
+	// 공통코드입니다.
+	cd: string;
+	// 노출순서입니다.
+	dispOrd: number;
+}
+
+// 매매일지 계좌와 주식 노출순서 저장 요청입니다.
+export interface StockSaleDisplayOrderUpdateRequest {
+	// 계좌 노출순서 목록입니다.
+	accountOrderList: StockSaleDisplayOrderItem[];
+	// 주식 노출순서 목록입니다.
+	stockOrderList: StockSaleDisplayOrderItem[];
+}
+
+// 매매일지 노출순서 저장 응답입니다.
+export interface StockSaleDisplayOrderUpdateResponse {
+	// 처리 메시지입니다.
+	message: string;
+	// 계좌 저장 건수입니다.
+	accountUpdatedCount: number;
+	// 주식 저장 건수입니다.
+	stockUpdatedCount: number;
+}
+
 // 종목별 합계 행을 정의합니다.
 export interface StockSaleSummaryRow {
 	// 주식 코드입니다.

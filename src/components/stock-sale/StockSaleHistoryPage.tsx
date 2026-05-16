@@ -1,14 +1,14 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import { AgGridReact } from "ag-grid-react";
 import { AllCommunityModule, ModuleRegistry, type CellClassParams, type ColDef, type ValueFormatterParams } from "ag-grid-community";
 import FeedbackLayer from "@/components/common/FeedbackLayer";
 import useFeedbackLayer from "@/components/common/useFeedbackLayer";
 import useResizableSplitLayout from "@/components/common/useResizableSplitLayout";
 import AdminDateInput from "@/components/work/AdminDateInput";
-import type { StockSaleBootstrapResponse, StockSaleCreateRequest, StockSaleListResponse, StockSaleOption, StockSaleRow, StockSaleSummaryRow } from "@/components/stock-sale/types";
-import { createStockSaleHistory, fetchStockSaleBootstrap, fetchStockSaleList } from "@/services/stockSaleApiService";
+import type { StockSaleBootstrapResponse, StockSaleCreateRequest, StockSaleDisplayOrderUpdateRequest, StockSaleListResponse, StockSaleOption, StockSaleRow, StockSaleSummaryRow } from "@/components/stock-sale/types";
+import { createStockSaleHistory, fetchStockSaleBootstrap, fetchStockSaleList, updateStockSaleDisplayOrder } from "@/services/stockSaleApiService";
 import { logoutWork, refreshWorkSession } from "@/services/workApiService";
 import styles from "./StockSaleHistoryPage.module.css";
 
@@ -19,6 +19,8 @@ const STOCK_SALE_GRID_PAGE_SIZE = 20;
 const STOCK_SALE_FETCH_PAGE_SIZE = 10000;
 const ACCOUNT_FAVORITE_STORAGE_KEY = "react-resume:stock-sale:favorite-account-codes";
 const STOCK_FAVORITE_STORAGE_KEY = "react-resume:stock-sale:favorite-stock-codes";
+
+type DisplayOrderListType = "account" | "stock";
 
 interface OptionButtonListProps {
 	// 선택 목록 제목입니다.
@@ -35,6 +37,34 @@ interface OptionButtonListProps {
 	onToggleFavorite: (code: string) => void;
 	// 선택 해제 콜백입니다.
 	onClearSelect: () => void;
+}
+
+interface DisplayOrderListProps {
+	// 노출순서 목록 제목입니다.
+	title: string;
+	// 노출순서를 조정할 목록 구분입니다.
+	listType: DisplayOrderListType;
+	// 노출순서 옵션 목록입니다.
+	optionList: StockSaleOption[];
+	// 현재 드래그 중인 항목 정보입니다.
+	dragState: DisplayOrderDragState | null;
+	// 저장 중 비활성화 여부입니다.
+	isDisabled: boolean;
+	// 드래그 시작 콜백입니다.
+	onDragStart: (listType: DisplayOrderListType, code: string, event: DragEvent<HTMLButtonElement>) => void;
+	// 드래그 위치 허용 콜백입니다.
+	onDragOver: (event: DragEvent<HTMLButtonElement>) => void;
+	// 드롭 콜백입니다.
+	onDrop: (listType: DisplayOrderListType, code: string, event: DragEvent<HTMLButtonElement>) => void;
+	// 드래그 종료 콜백입니다.
+	onDragEnd: () => void;
+}
+
+interface DisplayOrderDragState {
+	// 드래그 중인 목록 구분입니다.
+	listType: DisplayOrderListType;
+	// 드래그 중인 코드입니다.
+	code: string;
 }
 
 interface StockSaleCreateFormState {
@@ -137,6 +167,62 @@ function buildSortedOptionList(optionList: StockSaleOption[], favoriteCodeSet: S
 			}
 			return firstItem.cdNm.localeCompare(secondItem.cdNm, "ko");
 		});
+}
+
+// 노출순서 레이어에서 사용할 옵션 목록을 즐겨찾기 없이 노출순서 기준으로 정렬합니다.
+function buildDisplayOrderOptionList(optionList: StockSaleOption[]): StockSaleOption[] {
+	return optionList
+		.map((optionItem) => ({
+			...optionItem,
+			favoriteYn: "N",
+		}))
+		.sort((firstItem, secondItem) => {
+			const firstDispOrd = typeof firstItem.dispOrd === "number" ? firstItem.dispOrd : Number.MAX_SAFE_INTEGER;
+			const secondDispOrd = typeof secondItem.dispOrd === "number" ? secondItem.dispOrd : Number.MAX_SAFE_INTEGER;
+			if (firstDispOrd !== secondDispOrd) {
+				return firstDispOrd - secondDispOrd;
+			}
+			return firstItem.cdNm.localeCompare(secondItem.cdNm, "ko");
+		});
+}
+
+// 드래그한 옵션을 대상 옵션 위치로 이동합니다.
+function moveDisplayOrderOption(optionList: StockSaleOption[], draggingCode: string, targetCode: string): StockSaleOption[] {
+	const draggingIndex = optionList.findIndex((optionItem) => optionItem.cd === draggingCode);
+	const targetIndex = optionList.findIndex((optionItem) => optionItem.cd === targetCode);
+	if (draggingIndex < 0 || targetIndex < 0 || draggingIndex === targetIndex) {
+		return optionList;
+	}
+
+	const nextOptionList = [...optionList];
+	const [draggingItem] = nextOptionList.splice(draggingIndex, 1);
+	nextOptionList.splice(targetIndex, 0, draggingItem);
+	return nextOptionList;
+}
+
+// 화면 순서 목록을 API 저장 요청 항목으로 변환합니다.
+function buildDisplayOrderRequestItemList(optionList: StockSaleOption[]) {
+	return optionList.map((optionItem, optionIndex) => ({
+		cd: optionItem.cd,
+		dispOrd: optionIndex + 1,
+	}));
+}
+
+// 계좌와 주식 노출순서 저장 요청 값을 생성합니다.
+function buildStockSaleDisplayOrderUpdateRequest(accountList: StockSaleOption[], stockList: StockSaleOption[]): StockSaleDisplayOrderUpdateRequest {
+	return {
+		accountOrderList: buildDisplayOrderRequestItemList(accountList),
+		stockOrderList: buildDisplayOrderRequestItemList(stockList),
+	};
+}
+
+// 저장된 노출순서를 기존 선택 목록에 반영합니다.
+function applyDisplayOrderToOptionList(optionList: StockSaleOption[], orderedList: StockSaleOption[]): StockSaleOption[] {
+	const displayOrderMap = new Map(orderedList.map((optionItem, optionIndex) => [optionItem.cd, optionIndex + 1]));
+	return optionList.map((optionItem) => ({
+		...optionItem,
+		dispOrd: displayOrderMap.get(optionItem.cd) ?? optionItem.dispOrd,
+	}));
 }
 
 // 즐겨찾기된 유효 옵션 코드만 노출 순서대로 선택 목록으로 변환합니다.
@@ -295,6 +381,49 @@ function OptionButtonList({
 	);
 }
 
+// 노출순서 드래그 목록을 렌더링합니다.
+function DisplayOrderList({
+	title,
+	listType,
+	optionList,
+	dragState,
+	isDisabled,
+	onDragStart,
+	onDragOver,
+	onDrop,
+	onDragEnd,
+}: DisplayOrderListProps) {
+	return (
+		<section className={`${styles.orderSection} ${listType === "stock" ? styles.orderSectionStock : ""}`}>
+			<div className={styles.orderSectionHeader}>
+				<h3 className={styles.orderSectionTitle}>{title}</h3>
+				<span className={styles.sectionCount}>{optionList.length}</span>
+			</div>
+			<div className={styles.orderChipList}>
+				{optionList.map((optionItem, optionIndex) => {
+					const isDragging = dragState?.listType === listType && dragState.code === optionItem.cd;
+					return (
+						<button
+							key={optionItem.cd}
+							type="button"
+							className={`${styles.orderChip} ${isDragging ? styles.orderChipDragging : ""}`}
+							draggable={!isDisabled}
+							onDragStart={(event) => onDragStart(listType, optionItem.cd, event)}
+							onDragOver={onDragOver}
+							onDrop={(event) => onDrop(listType, optionItem.cd, event)}
+							onDragEnd={onDragEnd}
+							disabled={isDisabled}
+						>
+							<span className={styles.orderNumber}>{optionIndex + 1}</span>
+							<span className={styles.orderName}>{optionItem.cdNm}</span>
+						</button>
+					);
+				})}
+			</div>
+		</section>
+	);
+}
+
 // 매매일지 화면을 렌더링합니다.
 export default function StockSaleHistoryPage() {
 	const router = useRouter();
@@ -313,6 +442,8 @@ export default function StockSaleHistoryPage() {
 	const [isActionPending, setIsActionPending] = useState(false);
 	const [isCreateLayerOpen, setIsCreateLayerOpen] = useState(false);
 	const [isCreateSaving, setIsCreateSaving] = useState(false);
+	const [isOrderLayerOpen, setIsOrderLayerOpen] = useState(false);
+	const [isOrderSaving, setIsOrderSaving] = useState(false);
 	const [bootstrap, setBootstrap] = useState<StockSaleBootstrapResponse | null>(null);
 	const [listResponse, setListResponse] = useState<StockSaleListResponse>(createEmptyStockSaleListResponse);
 	const [startSaleDt, setStartSaleDt] = useState("");
@@ -321,6 +452,9 @@ export default function StockSaleHistoryPage() {
 	const [selectedStockCodeList, setSelectedStockCodeList] = useState<string[]>([]);
 	const [favoriteAccountCodeSet, setFavoriteAccountCodeSet] = useState<Set<string>>(() => new Set<string>());
 	const [favoriteStockCodeSet, setFavoriteStockCodeSet] = useState<Set<string>>(() => new Set<string>());
+	const [orderAccountList, setOrderAccountList] = useState<StockSaleOption[]>([]);
+	const [orderStockList, setOrderStockList] = useState<StockSaleOption[]>([]);
+	const [orderDragState, setOrderDragState] = useState<DisplayOrderDragState | null>(null);
 	const [showHoldingOnly, setShowHoldingOnly] = useState(true);
 	const [createFormState, setCreateFormState] = useState<StockSaleCreateFormState>({
 		saleDt: getTodayDateInputValue(),
@@ -346,9 +480,11 @@ export default function StockSaleHistoryPage() {
 			? "요청을 처리하고 있습니다."
 			: isCreateSaving
 				? "매매일지를 등록하고 있습니다."
-				: isListLoading
-					? "매매일지 목록을 불러오고 있습니다."
-					: "";
+				: isOrderSaving
+					? "노출순서를 저장하고 있습니다."
+					: isListLoading
+						? "매매일지 목록을 불러오고 있습니다."
+						: "";
 	const totalInvestmentAmount = useMemo(
 		() => listResponse.summaryList.reduce((sum, summaryItem) => sum + summaryItem.saleAmt, 0),
 		[listResponse.summaryList],
@@ -608,6 +744,93 @@ export default function StockSaleHistoryPage() {
 		void loadStockSaleList(1, startSaleDt, endSaleDt, selectedAccountCodeList, []);
 	};
 
+	// 노출순서 레이어를 열고 즐겨찾기를 제외한 기준 순서 목록을 채웁니다.
+	const handleOpenOrderLayer = () => {
+		setOrderAccountList(buildDisplayOrderOptionList(bootstrap?.accountList ?? []));
+		setOrderStockList(buildDisplayOrderOptionList(bootstrap?.stockList ?? []));
+		setOrderDragState(null);
+		setIsOrderLayerOpen(true);
+	};
+
+	// 노출순서 레이어를 닫습니다.
+	const handleCloseOrderLayer = () => {
+		if (isOrderSaving) {
+			return;
+		}
+		setOrderDragState(null);
+		setIsOrderLayerOpen(false);
+	};
+
+	// 노출순서 항목 드래그 시작 상태를 저장합니다.
+	const handleDisplayOrderDragStart = (listType: DisplayOrderListType, code: string, event: DragEvent<HTMLButtonElement>) => {
+		event.dataTransfer.effectAllowed = "move";
+		event.dataTransfer.setData("text/plain", code);
+		setOrderDragState({ listType, code });
+	};
+
+	// 노출순서 항목 위 드롭을 허용합니다.
+	const handleDisplayOrderDragOver = (event: DragEvent<HTMLButtonElement>) => {
+		event.preventDefault();
+		event.dataTransfer.dropEffect = "move";
+	};
+
+	// 드롭된 항목을 대상 항목 위치로 이동합니다.
+	const handleDisplayOrderDrop = (listType: DisplayOrderListType, targetCode: string, event: DragEvent<HTMLButtonElement>) => {
+		event.preventDefault();
+		if (!orderDragState || orderDragState.listType !== listType || orderDragState.code === targetCode) {
+			setOrderDragState(null);
+			return;
+		}
+
+		if (listType === "account") {
+			setOrderAccountList((prevState) => moveDisplayOrderOption(prevState, orderDragState.code, targetCode));
+		} else {
+			setOrderStockList((prevState) => moveDisplayOrderOption(prevState, orderDragState.code, targetCode));
+		}
+		setOrderDragState(null);
+	};
+
+	// 노출순서 항목 드래그 상태를 초기화합니다.
+	const handleDisplayOrderDragEnd = () => {
+		setOrderDragState(null);
+	};
+
+	// 노출순서를 저장하고 화면 목록에 반영합니다.
+	const handleDisplayOrderSubmit = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		if (!bootstrap) {
+			showError("매매일지 초기 데이터를 확인해주세요.");
+			return;
+		}
+
+		setIsOrderSaving(true);
+		try {
+			const command = buildStockSaleDisplayOrderUpdateRequest(orderAccountList, orderStockList);
+			const result = await updateStockSaleDisplayOrder(command);
+			if (!result.ok) {
+				showError(result.message || "노출순서 저장에 실패했습니다.");
+				return;
+			}
+
+			setBootstrap((prevState) => {
+				if (!prevState) {
+					return prevState;
+				}
+				return {
+					...prevState,
+					accountList: applyDisplayOrderToOptionList(prevState.accountList, orderAccountList),
+					stockList: applyDisplayOrderToOptionList(prevState.stockList, orderStockList),
+				};
+			});
+			setIsOrderLayerOpen(false);
+			setOrderDragState(null);
+			showSuccess(result.data?.message || "노출순서를 저장했습니다.");
+			await loadStockSaleList(1, startSaleDt, endSaleDt, selectedAccountCodeList, selectedStockCodeList);
+		} finally {
+			setIsOrderSaving(false);
+		}
+	};
+
 	// 매매등록 레이어를 열고 기본 입력값을 채웁니다.
 	const handleOpenCreateLayer = () => {
 		setCreateFormState({
@@ -689,7 +912,12 @@ export default function StockSaleHistoryPage() {
 								<p className={styles.eyebrow}>stock sale</p>
 								<h1 className={styles.sidebarTitle}>매매일지</h1>
 							</div>
-							<p className={styles.sidebarMeta}>{bootstrap?.currentUser?.userNm || "로그인 사용자"}</p>
+							<div className={styles.sidebarMetaActions}>
+								<p className={styles.sidebarMeta}>{bootstrap?.currentUser?.userNm || "로그인 사용자"}</p>
+								<button type="button" className={styles.orderButton} onClick={handleOpenOrderLayer} disabled={!bootstrap || isOrderSaving}>
+									노출순서
+								</button>
+							</div>
 						</div>
 
 						<div className={styles.filterScrollArea}>
@@ -882,11 +1110,67 @@ export default function StockSaleHistoryPage() {
 				</div>
 			) : null}
 
+			{isOrderLayerOpen ? (
+				<div className={styles.modalBackdrop} role="dialog" aria-modal="true" aria-labelledby="stockSaleOrderTitle">
+					<form className={styles.orderModal} onSubmit={handleDisplayOrderSubmit}>
+						<div className={styles.modalHeader}>
+							<div>
+								<p className={styles.eyebrow}>display order</p>
+								<h2 id="stockSaleOrderTitle" className={styles.contentTitle}>노출순서</h2>
+							</div>
+							<button type="button" className={styles.modalCloseButton} onClick={handleCloseOrderLayer} disabled={isOrderSaving} aria-label="노출순서 닫기">
+								×
+							</button>
+						</div>
+
+						<div className={styles.orderTabBar}>
+							<button type="button" className={styles.orderTabActive}>
+								노출순서
+							</button>
+						</div>
+
+						<div className={styles.orderGrid}>
+							<DisplayOrderList
+								title="계좌"
+								listType="account"
+								optionList={orderAccountList}
+								dragState={orderDragState}
+								isDisabled={isOrderSaving}
+								onDragStart={handleDisplayOrderDragStart}
+								onDragOver={handleDisplayOrderDragOver}
+								onDrop={handleDisplayOrderDrop}
+								onDragEnd={handleDisplayOrderDragEnd}
+							/>
+							<DisplayOrderList
+								title="주식"
+								listType="stock"
+								optionList={orderStockList}
+								dragState={orderDragState}
+								isDisabled={isOrderSaving}
+								onDragStart={handleDisplayOrderDragStart}
+								onDragOver={handleDisplayOrderDragOver}
+								onDrop={handleDisplayOrderDrop}
+								onDragEnd={handleDisplayOrderDragEnd}
+							/>
+						</div>
+
+						<div className={styles.modalActions}>
+							<button type="button" className={styles.ghostButton} onClick={handleCloseOrderLayer} disabled={isOrderSaving}>
+								취소
+							</button>
+							<button type="submit" className={styles.secondaryButton} disabled={isOrderSaving}>
+								저장
+							</button>
+						</div>
+					</form>
+				</div>
+			) : null}
+
 			<FeedbackLayer
 				successMessage={successMessage}
 				isSuccessVisible={isSuccessVisible}
 				errorMessage={errorMessage}
-				loadingVisible={isInitializing || isListLoading || isActionPending || isCreateSaving}
+				loadingVisible={isInitializing || isListLoading || isActionPending || isCreateSaving || isOrderSaving}
 				loadingMessage={blockingLoadingMessage}
 				onErrorClose={clearError}
 			/>

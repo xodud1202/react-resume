@@ -2,6 +2,8 @@ import type {
 	StockSaleBootstrapResponse,
 	StockSaleCreateRequest,
 	StockSaleCreateResponse,
+	StockSaleDisplayOrderUpdateRequest,
+	StockSaleDisplayOrderUpdateResponse,
 	StockSaleListFilter,
 	StockSaleListResponse,
 	StockSaleOption,
@@ -130,6 +132,15 @@ function normalizeStockSaleListResponse(data: Partial<StockSaleListResponse> | n
 	};
 }
 
+// 매매일지 노출순서 저장 응답을 화면 기본값으로 정규화합니다.
+function normalizeStockSaleDisplayOrderUpdateResponse(data: Partial<StockSaleDisplayOrderUpdateResponse> | null | undefined): StockSaleDisplayOrderUpdateResponse {
+	return {
+		message: resolveStringValue(data?.message),
+		accountUpdatedCount: resolveNumberValue(data?.accountUpdatedCount),
+		stockUpdatedCount: resolveNumberValue(data?.stockUpdatedCount),
+	};
+}
+
 // 매매일지 화면 초기 데이터를 조회합니다.
 export async function fetchStockSaleBootstrap(): Promise<WorkClientApiResult<StockSaleBootstrapResponse>> {
 	const result = await requestWorkClientApi<StockSaleBootstrapResponse>("/api/work/stock-sale-history/bootstrap");
@@ -160,4 +171,19 @@ export async function createStockSaleHistory(command: StockSaleCreateRequest): P
 		method: "POST",
 		body: command,
 	});
+}
+
+// 매매일지 계좌와 주식 선택 목록의 노출순서를 저장합니다.
+export async function updateStockSaleDisplayOrder(command: StockSaleDisplayOrderUpdateRequest): Promise<WorkClientApiResult<StockSaleDisplayOrderUpdateResponse>> {
+	const result = await requestWorkClientApi<StockSaleDisplayOrderUpdateResponse>("/api/work/stock-sale-history/display-order", {
+		method: "POST",
+		body: command,
+	});
+	if (!result.ok || !result.data) {
+		return result;
+	}
+	return {
+		...result,
+		data: normalizeStockSaleDisplayOrderUpdateResponse(result.data),
+	};
 }

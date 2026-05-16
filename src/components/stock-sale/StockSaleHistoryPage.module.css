@@ -137,6 +137,13 @@
 	align-items: flex-start;
 }
 
+.sidebarMetaActions {
+	display: grid;
+	gap: 0.45rem;
+	justify-items: end;
+	min-width: 0;
+}
+
 .eyebrow,
 .sidebarMeta,
 .emptyText,
@@ -317,6 +324,7 @@
 
 .favoriteButton,
 .optionButton,
+.orderButton,
 .primaryButton,
 .secondaryButton,
 .ghostButton,
@@ -369,6 +377,23 @@
 	font-weight: 800;
 }
 
+.orderButton {
+	min-height: 2rem;
+	border: 1px solid var(--stock-sale-border);
+	border-radius: 8px;
+	background: rgba(15, 23, 42, 0.32);
+	color: var(--stock-sale-ink);
+	font-size: 0.78rem;
+	font-weight: 800;
+	padding: 0 0.7rem;
+	white-space: nowrap;
+}
+
+.orderButton:hover {
+	border-color: var(--stock-sale-border-strong);
+	background: rgba(45, 212, 191, 0.09);
+}
+
 .sidebarActions {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr);
@@ -412,6 +437,7 @@
 }
 
 .primaryButton:disabled,
+.orderButton:disabled,
 .secondaryButton:disabled,
 .ghostButton:disabled,
 .pageButton:disabled,
@@ -523,6 +549,20 @@
 	color: var(--stock-sale-ink);
 }
 
+.orderModal {
+	display: grid;
+	gap: 1rem;
+	width: min(40rem, 100%);
+	max-height: calc(100vh - 2rem);
+	overflow: auto;
+	padding: 1rem;
+	border: 1px solid var(--stock-sale-border-strong);
+	border-radius: 12px;
+	background: #101b1a;
+	box-shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
+	color: var(--stock-sale-ink);
+}
+
 .modalHeader,
 .modalActions {
 	display: flex;
@@ -549,6 +589,138 @@
 .modalCloseButton:hover {
 	border-color: var(--stock-sale-border-strong);
 	background: rgba(45, 212, 191, 0.09);
+}
+
+.orderTabBar {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	border-bottom: 1px solid var(--stock-sale-border);
+}
+
+.orderTabActive {
+	min-height: 2.35rem;
+	border: 0;
+	border-bottom: 2px solid var(--stock-sale-accent);
+	background: transparent;
+	color: var(--stock-sale-ink);
+	cursor: default;
+	font: inherit;
+	font-size: 0.86rem;
+	font-weight: 900;
+	padding: 0 0.8rem;
+}
+
+.orderGrid {
+	display: grid;
+	grid-template-columns: minmax(0, 13.5rem) minmax(0, 350px);
+	gap: 1rem;
+	justify-content: center;
+	min-width: 0;
+}
+
+.orderSection {
+	display: grid;
+	gap: 0.65rem;
+	min-width: 0;
+}
+
+.orderSectionHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+.orderSectionTitle {
+	margin: 0;
+	color: var(--stock-sale-muted);
+	font-size: 0.88rem;
+	font-weight: 900;
+}
+
+.orderChipList {
+	display: grid;
+	align-content: start;
+	align-items: start;
+	grid-auto-rows: 40px;
+	gap: 0.45rem;
+	height: clamp(18rem, 48vh, 30rem);
+	min-width: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+	padding: 0.75rem;
+	border: 1px solid var(--stock-sale-border);
+	border-radius: 8px;
+	background: #07100f;
+}
+
+.orderChip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.45rem;
+	justify-content: flex-start;
+	width: 100%;
+	max-width: 200px;
+	height: 40px;
+	border: 1px solid var(--stock-sale-border);
+	border-radius: 8px;
+	background: rgba(15, 23, 42, 0.34);
+	color: var(--stock-sale-ink);
+	cursor: grab;
+	font: inherit;
+	font-size: 0.84rem;
+	font-weight: 800;
+	padding: 0 0.7rem 0 0.45rem;
+	text-align: left;
+	transition:
+		background 0.14s ease,
+		border-color 0.14s ease,
+		opacity 0.14s ease;
+}
+
+.orderSectionStock .orderChip {
+	max-width: 350px;
+}
+
+.orderChip:hover {
+	border-color: var(--stock-sale-border-strong);
+	background: rgba(45, 212, 191, 0.09);
+}
+
+.orderChip:active {
+	cursor: grabbing;
+}
+
+.orderChip:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
+}
+
+.orderChipDragging {
+	border-color: rgba(45, 212, 191, 0.76);
+	opacity: 0.48;
+}
+
+.orderNumber {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	min-width: 1.45rem;
+	height: 1.45rem;
+	border-radius: 999px;
+	background: rgba(45, 212, 191, 0.16);
+	color: var(--stock-sale-accent);
+	font-size: 0.72rem;
+	font-weight: 900;
+}
+
+.orderName {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .createFormGrid {
@@ -639,6 +811,10 @@
 	}
 
 	.createFormGrid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.orderGrid {
 		grid-template-columns: minmax(0, 1fr);
 	}
 
