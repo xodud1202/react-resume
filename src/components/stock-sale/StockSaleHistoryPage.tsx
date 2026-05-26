@@ -241,9 +241,14 @@ function getTodayDateInputValue(): string {
 	return `${year}-${month}-${day}`;
 }
 
+// 금액 입력값에서 화면 표시용 구분자를 제거합니다.
+function removeAmountGroupSeparator(value: string): string {
+	return value.replace(/,/g, "").trim();
+}
+
 // 문자열 숫자 입력값을 정수로 변환합니다.
 function parseIntegerInputValue(value: string): number | null {
-	const normalizedValue = value.trim();
+	const normalizedValue = removeAmountGroupSeparator(value);
 	if (normalizedValue === "") {
 		return null;
 	}
@@ -254,11 +259,32 @@ function parseIntegerInputValue(value: string): number | null {
 	return parsedValue;
 }
 
+// 금액 입력값을 천 단위 구분자가 있는 입력 문자열로 변환합니다.
+function formatIntegerInputValue(value: string, allowNegative: boolean): string {
+	const normalizedValue = removeAmountGroupSeparator(value);
+	const isNegative = allowNegative && normalizedValue.startsWith("-");
+	const unsignedValue = normalizedValue.replace(/-/g, "").replace(/\D/g, "");
+	if (unsignedValue === "") {
+		return isNegative ? "-" : "";
+	}
+	const formattedValue = new Intl.NumberFormat("ko-KR").format(Number(unsignedValue));
+	return isNegative ? `-${formattedValue}` : formattedValue;
+}
+
+// 빈 손익 입력값은 저장 기본값 0으로 변환하고 잘못된 숫자는 구분합니다.
+function parseProfitAmountInputValue(value: string): number | null {
+	const normalizedValue = removeAmountGroupSeparator(value);
+	if (normalizedValue === "") {
+		return 0;
+	}
+	return parseIntegerInputValue(value);
+}
+
 // 등록 폼 상태를 API 요청 값으로 변환합니다.
 function buildStockSaleCreateRequest(formState: StockSaleCreateFormState): StockSaleCreateRequest | null {
 	const saleCnt = parseIntegerInputValue(formState.saleCnt);
 	const saleAmt = parseIntegerInputValue(formState.saleAmt);
-	const profitAmt = parseIntegerInputValue(formState.profitAmt);
+	const profitAmt = parseProfitAmountInputValue(formState.profitAmt);
 	if (formState.saleDt.trim() === "" || formState.stockAccountCd.trim() === "" || formState.stockNmCd.trim() === "" || !saleCnt || saleAmt === null || profitAmt === null) {
 		return null;
 	}
@@ -462,7 +488,7 @@ export default function StockSaleHistoryPage() {
 		stockNmCd: "",
 		saleCnt: "",
 		saleAmt: "",
-		profitAmt: "0",
+		profitAmt: "",
 		memo: "",
 	});
 
@@ -839,7 +865,7 @@ export default function StockSaleHistoryPage() {
 			stockNmCd: selectedStockCodeList[0] ?? stockOptionList[0]?.cd ?? "",
 			saleCnt: "",
 			saleAmt: "",
-			profitAmt: "0",
+			profitAmt: "",
 			memo: "",
 		});
 		setIsCreateLayerOpen(true);
@@ -856,9 +882,14 @@ export default function StockSaleHistoryPage() {
 	// 매매등록 입력값을 갱신합니다.
 	const handleCreateFormChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
 		const { name, value } = event.target;
+		const nextValue = name === "saleAmt"
+			? formatIntegerInputValue(value, false)
+			: name === "profitAmt"
+				? formatIntegerInputValue(value, true)
+				: value;
 		setCreateFormState((prevState) => ({
 			...prevState,
-			[name]: value,
+			[name]: nextValue,
 		}));
 	};
 
@@ -1086,11 +1117,11 @@ export default function StockSaleHistoryPage() {
 							</label>
 							<label className={styles.fieldLabel}>
 								매매금액
-								<input name="saleAmt" className={styles.formControl} type="number" step="1" value={createFormState.saleAmt} onChange={handleCreateFormChange} disabled={isCreateSaving} />
+								<input name="saleAmt" className={styles.formControl} type="text" inputMode="numeric" value={createFormState.saleAmt} onChange={handleCreateFormChange} disabled={isCreateSaving} />
 							</label>
 							<label className={styles.fieldLabel}>
 								손익금액
-								<input name="profitAmt" className={styles.formControl} type="number" step="1" value={createFormState.profitAmt} onChange={handleCreateFormChange} disabled={isCreateSaving} />
+								<input name="profitAmt" className={styles.formControl} type="text" inputMode="numeric" value={createFormState.profitAmt} onChange={handleCreateFormChange} disabled={isCreateSaving} placeholder="0" />
 							</label>
 							<label className={`${styles.fieldLabel} ${styles.memoField}`}>
 								메모
