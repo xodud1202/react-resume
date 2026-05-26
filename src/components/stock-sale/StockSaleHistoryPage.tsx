@@ -280,6 +280,22 @@ function parseProfitAmountInputValue(value: string): number | null {
 	return parseIntegerInputValue(value);
 }
 
+// 등록 폼의 필수 입력값 누락 안내 문구를 생성합니다.
+function resolveStockSaleCreateRequiredMessage(formState: StockSaleCreateFormState): string {
+	const isSaleCntMissing = removeAmountGroupSeparator(formState.saleCnt) === "";
+	const isSaleAmtMissing = removeAmountGroupSeparator(formState.saleAmt) === "";
+	if (isSaleCntMissing && isSaleAmtMissing) {
+		return "매매수와 매매금액을 입력해주세요.";
+	}
+	if (isSaleCntMissing) {
+		return "매매수를 입력해주세요.";
+	}
+	if (isSaleAmtMissing) {
+		return "매매금액을 입력해주세요.";
+	}
+	return "";
+}
+
 // 등록 폼 상태를 API 요청 값으로 변환합니다.
 function buildStockSaleCreateRequest(formState: StockSaleCreateFormState): StockSaleCreateRequest | null {
 	const saleCnt = parseIntegerInputValue(formState.saleCnt);
@@ -883,7 +899,7 @@ export default function StockSaleHistoryPage() {
 	const handleCreateFormChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
 		const { name, value } = event.target;
 		const nextValue = name === "saleAmt"
-			? formatIntegerInputValue(value, false)
+			? formatIntegerInputValue(value, true)
 			: name === "profitAmt"
 				? formatIntegerInputValue(value, true)
 				: value;
@@ -896,6 +912,12 @@ export default function StockSaleHistoryPage() {
 	// 매매일지 거래 이력을 저장하고 현재 검색 조건으로 목록을 다시 조회합니다.
 	const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
+		const requiredMessage = resolveStockSaleCreateRequiredMessage(createFormState);
+		if (requiredMessage !== "") {
+			showError(requiredMessage);
+			return;
+		}
+
 		const command = buildStockSaleCreateRequest(createFormState);
 		if (!command) {
 			showError("매매등록 입력값을 확인해주세요.");
