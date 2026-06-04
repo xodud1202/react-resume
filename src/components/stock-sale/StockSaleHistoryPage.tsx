@@ -2,7 +2,7 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import { AgGridReact } from "ag-grid-react";
-import { AllCommunityModule, ModuleRegistry, type CellClassParams, type ColDef, type ValueFormatterParams } from "ag-grid-community";
+import { AllCommunityModule, ModuleRegistry, type CellClassParams, type ColDef, type ValueFormatterParams, type ValueGetterParams } from "ag-grid-community";
 import FeedbackLayer from "@/components/common/FeedbackLayer";
 import useFeedbackLayer from "@/components/common/useFeedbackLayer";
 import useResizableSplitLayout from "@/components/common/useResizableSplitLayout";
@@ -331,6 +331,14 @@ function formatAverageAmount(value: number | null | undefined): string {
 	}).format(value);
 }
 
+// 상세 매매 행에서 거래 단가를 계산합니다.
+function calculateStockSaleUnitPrice(row: StockSaleRow | null | undefined): number | null {
+	if (!row || !Number.isFinite(row.saleAmt) || !Number.isFinite(row.saleCnt) || row.saleCnt === 0) {
+		return null;
+	}
+	return row.saleAmt / row.saleCnt;
+}
+
 // 금액의 양수와 음수 스타일을 구분할 수 있는 클래스명을 반환합니다.
 function resolveAmountToneClassName(value: number): string {
 	if (value > 0) {
@@ -374,6 +382,16 @@ function formatSummaryGridNumber(params: ValueFormatterParams<StockSaleSummaryRo
 
 // ag-grid 종목별 합계 평단 값을 소수점 허용 문자로 변환합니다.
 function formatSummaryAverageAmount(params: ValueFormatterParams<StockSaleSummaryRow, number | null>): string {
+	return formatAverageAmount(params.value);
+}
+
+// ag-grid 상세 목록 거래 단가 값을 계산합니다.
+function resolveDetailUnitPrice(params: ValueGetterParams<StockSaleRow, number | null>): number | null {
+	return calculateStockSaleUnitPrice(params.data);
+}
+
+// ag-grid 상세 목록 거래 단가 값을 소수점 허용 문자로 변환합니다.
+function formatDetailUnitPrice(params: ValueFormatterParams<StockSaleRow, number | null>): string {
 	return formatAverageAmount(params.value);
 }
 
@@ -627,6 +645,16 @@ export default function StockSaleHistoryPage() {
 			type: "numericColumn",
 			headerClass: styles.centerHeader,
 			valueFormatter: formatGridNumber,
+			cellClass: resolveDetailNumberCellClass,
+			sortable: false,
+		},
+		{
+			headerName: "거래단가",
+			width: 150,
+			type: "numericColumn",
+			headerClass: styles.centerHeader,
+			valueGetter: resolveDetailUnitPrice,
+			valueFormatter: formatDetailUnitPrice,
 			cellClass: resolveDetailNumberCellClass,
 			sortable: false,
 		},
