@@ -545,13 +545,13 @@ export default function StockSaleHistoryPage() {
 					: isListLoading
 						? "매매일지 목록을 불러오고 있습니다."
 						: "";
-	const totalInvestmentAmount = useMemo(
-		() => listResponse.summaryList.reduce((sum, summaryItem) => sum + summaryItem.saleAmt, 0),
-		[listResponse.summaryList],
-	);
 	const visibleSummaryList = useMemo(
 		() => (showHoldingOnly ? listResponse.summaryList.filter((summaryItem) => summaryItem.saleCnt !== 0) : listResponse.summaryList),
 		[listResponse.summaryList, showHoldingOnly],
+	);
+	const totalInvestmentAmount = useMemo(
+		() => visibleSummaryList.reduce((sum, summaryItem) => sum + summaryItem.holdingPrincipalAmt, 0),
+		[visibleSummaryList],
 	);
 	const summaryColumnDefs = useMemo<ColDef<StockSaleSummaryRow>[]>(() => [
 		{
@@ -573,8 +573,8 @@ export default function StockSaleHistoryPage() {
 			sortable: false,
 		},
 		{
-			headerName: "매매금액",
-			field: "saleAmt",
+			headerName: "보유원금",
+			field: "holdingPrincipalAmt",
 			width: 150,
 			type: "numericColumn",
 			headerClass: styles.centerHeader,
@@ -583,7 +583,7 @@ export default function StockSaleHistoryPage() {
 			sortable: false,
 		},
 		{
-			headerName: "매매평단",
+			headerName: "보유평단",
 			field: "averageSaleAmt",
 			width: 150,
 			type: "numericColumn",

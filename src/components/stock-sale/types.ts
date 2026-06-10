@@ -92,6 +92,8 @@ export interface StockSaleSummaryRow {
 	saleCnt: number;
 	// 매매금액 합계입니다.
 	saleAmt: number;
+	// 현재 보유 원금입니다.
+	holdingPrincipalAmt: number;
 	// 매매평단입니다.
 	averageSaleAmt: number | null;
 	// 손익 합계입니다.

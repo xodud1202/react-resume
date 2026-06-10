@@ -90,6 +90,7 @@ function normalizeStockSaleSummaryRow(row: Partial<StockSaleSummaryRow> | null |
 		stockNm: resolveStringValue(row?.stockNm),
 		saleCnt: resolveNumberValue(row?.saleCnt),
 		saleAmt: resolveNumberValue(row?.saleAmt),
+		holdingPrincipalAmt: resolveNumberValue(row?.holdingPrincipalAmt),
 		averageSaleAmt: resolveNullableNumberValue(row?.averageSaleAmt),
 		profitAmt: resolveNumberValue(row?.profitAmt),
 	};
