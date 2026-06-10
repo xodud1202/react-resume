@@ -280,8 +280,8 @@ function parseProfitAmountInputValue(value: string): number | null {
 	return parseIntegerInputValue(value);
 }
 
-// 등록 폼의 필수 입력값 누락 안내 문구를 생성합니다.
-function resolveStockSaleCreateRequiredMessage(formState: StockSaleCreateFormState): string {
+// 등록 폼의 필수 입력값과 거래 방향별 금액 규칙 안내 문구를 생성합니다.
+function resolveStockSaleCreateValidationMessage(formState: StockSaleCreateFormState): string {
 	const isSaleCntMissing = removeAmountGroupSeparator(formState.saleCnt) === "";
 	const isSaleAmtMissing = removeAmountGroupSeparator(formState.saleAmt) === "";
 	if (isSaleCntMissing && isSaleAmtMissing) {
@@ -293,6 +293,21 @@ function resolveStockSaleCreateRequiredMessage(formState: StockSaleCreateFormSta
 	if (isSaleAmtMissing) {
 		return "매매금액을 입력해주세요.";
 	}
+	const saleCnt = parseIntegerInputValue(formState.saleCnt);
+	const saleAmt = parseIntegerInputValue(formState.saleAmt);
+	const profitAmt = parseProfitAmountInputValue(formState.profitAmt);
+	if (saleCnt === null || saleCnt === 0 || saleAmt === null || saleAmt === 0 || profitAmt === null) {
+		return "매매등록 입력값을 확인해주세요.";
+	}
+	if (saleCnt > 0 && saleAmt < 0) {
+		return "매수는 양수만 입력 할 수 있습니다.";
+	}
+	if (saleCnt < 0 && saleAmt > 0) {
+		return "매도는 음수만 입력 할 수 있습니다.";
+	}
+	if (saleCnt > 0 && profitAmt !== 0) {
+		return "매수 등록 시 손익금액은 입력할 수 없습니다.";
+	}
 	return "";
 }
 
@@ -301,7 +316,7 @@ function buildStockSaleCreateRequest(formState: StockSaleCreateFormState): Stock
 	const saleCnt = parseIntegerInputValue(formState.saleCnt);
 	const saleAmt = parseIntegerInputValue(formState.saleAmt);
 	const profitAmt = parseProfitAmountInputValue(formState.profitAmt);
-	if (formState.saleDt.trim() === "" || formState.stockAccountCd.trim() === "" || formState.stockNmCd.trim() === "" || !saleCnt || saleAmt === null || profitAmt === null) {
+	if (formState.saleDt.trim() === "" || formState.stockAccountCd.trim() === "" || formState.stockNmCd.trim() === "" || !saleCnt || !saleAmt || profitAmt === null) {
 		return null;
 	}
 	return {
@@ -534,6 +549,11 @@ export default function StockSaleHistoryPage() {
 		() => buildSortedOptionList(bootstrap?.stockList ?? [], favoriteStockCodeSet),
 		[bootstrap?.stockList, favoriteStockCodeSet],
 	);
+	const createFormSaleCnt = useMemo(
+		() => parseIntegerInputValue(createFormState.saleCnt),
+		[createFormState.saleCnt],
+	);
+	const isCreateProfitAmountDisabled = createFormSaleCnt !== null && createFormSaleCnt > 0;
 	const blockingLoadingMessage = isInitializing
 		? "매매일지 화면을 준비하고 있습니다."
 		: isActionPending
@@ -931,16 +951,23 @@ export default function StockSaleHistoryPage() {
 			: name === "profitAmt"
 				? formatIntegerInputValue(value, true)
 				: value;
-		setCreateFormState((prevState) => ({
-			...prevState,
-			[name]: nextValue,
-		}));
+		setCreateFormState((prevState) => {
+			const nextState = {
+				...prevState,
+				[name]: nextValue,
+			};
+			const nextSaleCnt = parseIntegerInputValue(name === "saleCnt" ? nextValue : prevState.saleCnt);
+			if (nextSaleCnt !== null && nextSaleCnt > 0) {
+				nextState.profitAmt = "";
+			}
+			return nextState;
+		});
 	};
 
 	// 매매일지 거래 이력을 저장하고 현재 검색 조건으로 목록을 다시 조회합니다.
 	const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		const requiredMessage = resolveStockSaleCreateRequiredMessage(createFormState);
+		const requiredMessage = resolveStockSaleCreateValidationMessage(createFormState);
 		if (requiredMessage !== "") {
 			showError(requiredMessage);
 			return;
@@ -1171,7 +1198,7 @@ export default function StockSaleHistoryPage() {
 							</label>
 							<label className={styles.fieldLabel}>
 								손익금액
-								<input name="profitAmt" className={styles.formControl} type="text" inputMode="numeric" value={createFormState.profitAmt} onChange={handleCreateFormChange} disabled={isCreateSaving} placeholder="0" />
+								<input name="profitAmt" className={styles.formControl} type="text" inputMode="numeric" value={createFormState.profitAmt} onChange={handleCreateFormChange} disabled={isCreateSaving || isCreateProfitAmountDisabled} placeholder="0" />
 							</label>
 							<label className={`${styles.fieldLabel} ${styles.memoField}`}>
 								메모
