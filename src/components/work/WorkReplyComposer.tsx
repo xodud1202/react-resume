@@ -74,6 +74,7 @@ export default function WorkReplyComposer({
 }: WorkReplyComposerProps) {
 	const fileInputRef = useRef<HTMLInputElement | null>(null);
 	const [commentHtml, setCommentHtml] = useState(initialHtml);
+	const [isHtmlSourceMode, setIsHtmlSourceMode] = useState(false);
 	const [newFiles, setNewFiles] = useState<File[]>([]);
 	const [deleteReplyFileSeqList, setDeleteReplyFileSeqList] = useState<number[]>([]);
 	const editorId = `work-reply-composer-${mode}-${workSeq}-${replySeq ?? "new"}`;
@@ -121,9 +122,20 @@ export default function WorkReplyComposer({
 		));
 	};
 
+	// HTML 원문 편집 모드를 전환합니다.
+	const handleToggleHtmlSourceMode = () => {
+		setIsHtmlSourceMode((prevState) => !prevState);
+	};
+
+	// HTML 원문 textarea 변경값을 댓글 draft에 반영합니다.
+	const handleChangeHtmlSource = (event: ChangeEvent<HTMLTextAreaElement>) => {
+		setCommentHtml(event.target.value);
+	};
+
 	// 신규 댓글 저장 성공 시 로컬 draft를 비웁니다.
 	const resetCreateDraft = () => {
 		setCommentHtml("");
+		setIsHtmlSourceMode(false);
 		setNewFiles([]);
 		setDeleteReplyFileSeqList([]);
 		if (fileInputRef.current) {
@@ -195,17 +207,40 @@ export default function WorkReplyComposer({
 
 	return (
 		<div className={mode === "edit" ? styles.replyEditShell : styles.replyEditorShell}>
-			<div className={styles.quillShell}>
-				<LazyQuillEditor
-					id={editorId}
-					ref={replyQuill.quillRef}
-					theme="snow"
-					value={commentHtml}
-					onChange={replyQuill.handleEditorChange}
-					modules={replyQuill.quillModules}
-					formats={replyQuill.quillFormats}
-				/>
+			<div className={styles.replyEditorModeRow}>
+				<span className={styles.replyEditorModeLabel}>{isHtmlSourceMode ? "HTML 원문 편집" : "서식 에디터"}</span>
+				<button
+					type="button"
+					className={`${styles.secondaryButton} ${styles.replyEditorModeButton}`}
+					onClick={handleToggleHtmlSourceMode}
+					aria-pressed={isHtmlSourceMode}
+					disabled={isSubmitting}
+				>
+					{isHtmlSourceMode ? "에디터 보기" : "HTML 수정"}
+				</button>
 			</div>
+			{isHtmlSourceMode ? (
+				<textarea
+					className={styles.replyHtmlSource}
+					aria-label="댓글 HTML 원문"
+					value={commentHtml}
+					onChange={handleChangeHtmlSource}
+					disabled={isSubmitting}
+					spellCheck={false}
+				/>
+			) : (
+				<div className={styles.quillShell}>
+					<LazyQuillEditor
+						id={editorId}
+						ref={replyQuill.quillRef}
+						theme="snow"
+						value={commentHtml}
+						onChange={replyQuill.handleEditorChange}
+						modules={replyQuill.quillModules}
+						formats={replyQuill.quillFormats}
+					/>
+				</div>
+			)}
 			{mode === "edit" ? (
 				<div className={styles.fileTileGrid}>
 					{existingFiles.map((fileItem) => renderExistingReplyFileTile(fileItem))}

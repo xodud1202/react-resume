@@ -757,6 +757,43 @@
 	background: rgba(7, 11, 16, 0.82);
 }
 
+.replyEditorModeRow {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+}
+
+.replyEditorModeLabel {
+	color: var(--work-muted);
+	font-size: 0.85rem;
+	font-weight: 700;
+}
+
+.replyEditorModeButton {
+	flex: 0 0 auto;
+	min-width: 96px;
+}
+
+.replyHtmlSource {
+	width: 100%;
+	min-height: 180px;
+	padding: 0.85rem 0.95rem;
+	border: 1px solid var(--work-border);
+	border-radius: 14px;
+	background: #0c1118;
+	color: var(--work-ink);
+	font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+	font-size: 0.9rem;
+	line-height: 1.55;
+	resize: vertical;
+}
+
+.replyHtmlSource:disabled {
+	opacity: 0.7;
+	cursor: wait;
+}
+
 .replyComposerFooter {
 	display: flex;
 	align-items: flex-start;
@@ -820,6 +857,12 @@
 .replyContent {
 	color: var(--work-ink);
 	margin: 15px 0;
+}
+
+.replyContent img {
+	width: auto !important;
+	max-width: 50% !important;
+	height: auto !important;
 }
 
 .modalOverlay,
