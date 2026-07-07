@@ -38,6 +38,11 @@ const LANDING_MENU_BUTTON_LIST: LandingMenuButton[] = [
 		href: "/work/stock",
 		description: "매매일지 화면으로 이동합니다.",
 	},
+	{
+		label: "부자계산기",
+		href: "/rich/calc",
+		description: "부자계산기 화면으로 이동합니다.",
+	},
 ];
 
 /**
