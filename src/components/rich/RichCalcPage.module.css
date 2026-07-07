@@ -125,6 +125,7 @@
 }
 
 .chartCanvas {
+	position: relative;
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -170,6 +171,58 @@
 	fill: #ffffff;
 	stroke: #2563eb;
 	stroke-width: 3;
+}
+
+.tooltipPointGroup {
+	outline: none;
+}
+
+.tooltipHitCircle {
+	fill: transparent;
+	stroke: transparent;
+	stroke-width: 2;
+	cursor: pointer;
+	outline: none;
+}
+
+.tooltipPointGroup:hover .tooltipHitCircle,
+.tooltipHitCircle:focus-visible {
+	fill: rgba(37, 99, 235, 0.08);
+	stroke: rgba(37, 99, 235, 0.62);
+}
+
+.chartTooltipGroup {
+	opacity: 0;
+	pointer-events: none;
+	visibility: hidden;
+	transition:
+		opacity 0.14s ease,
+		visibility 0.14s ease;
+}
+
+.tooltipPointGroup:hover .chartTooltipGroup,
+.tooltipPointGroup:focus-within .chartTooltipGroup {
+	opacity: 1;
+	visibility: visible;
+}
+
+.chartTooltipGroup rect {
+	fill: rgba(15, 23, 42, 0.94);
+	stroke: rgba(255, 255, 255, 0.14);
+	stroke-width: 1;
+	filter: drop-shadow(0 12px 18px rgba(15, 23, 42, 0.22));
+}
+
+.tooltipYear {
+	fill: rgba(226, 232, 240, 0.84);
+	font-size: 0.78rem;
+	font-weight: 800;
+}
+
+.tooltipAmount {
+	fill: #ffffff;
+	font-size: 1rem;
+	font-weight: 900;
 }
 
 .axisLabel {

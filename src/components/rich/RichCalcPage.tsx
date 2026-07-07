@@ -12,6 +12,9 @@ const CHART_PADDING = {
 	left: 74,
 };
 const CHART_GUIDE_LINE_COUNT = 5;
+const CHART_TOOLTIP_WIDTH = 188;
+const CHART_TOOLTIP_HEIGHT = 58;
+const CHART_TOOLTIP_GAP = 16;
 
 interface RichCalcFormState {
 	// 원금 입력값입니다.
@@ -89,11 +92,18 @@ interface RichCalcChartGeometry {
 	axisLabelPointList: RichCalcSvgPoint[];
 }
 
+interface RichCalcTooltipPosition {
+	// 툴팁 SVG x 좌표입니다.
+	x: number;
+	// 툴팁 SVG y 좌표입니다.
+	y: number;
+}
+
 const DEFAULT_FORM_STATE: RichCalcFormState = {
-	principalAmt: "10,000,000",
-	monthlyPaymentAmt: "500,000",
-	paymentYear: "20",
-	annualReturnRate: "6",
+	principalAmt: "22,000,000",
+	monthlyPaymentAmt: "1,000,000",
+	paymentYear: "17",
+	annualReturnRate: "10",
 };
 
 // 금액 문자열에서 숫자 값만 추출합니다.
@@ -309,6 +319,22 @@ function resolveProfitClassName(value: number): string {
 	return "";
 }
 
+// 그래프 포인트 툴팁의 aria-label 문구를 생성합니다.
+function formatChartTooltipLabel(pointItem: RichCalcYearPoint): string {
+	return `${pointItem.year}년 후 예상 총 금액 ${formatWon(pointItem.totalAmt)}`;
+}
+
+// SVG 내부 툴팁이 차트 밖으로 나가지 않도록 위치를 계산합니다.
+function buildTooltipPosition(pointItem: RichCalcSvgPoint): RichCalcTooltipPosition {
+	const preferredX = pointItem.x - CHART_TOOLTIP_WIDTH / 2;
+	const minX = CHART_PADDING.left;
+	const maxX = CHART_WIDTH - CHART_PADDING.right - CHART_TOOLTIP_WIDTH;
+	const x = Math.min(Math.max(preferredX, minX), maxX);
+	const preferredTopY = pointItem.y - CHART_TOOLTIP_HEIGHT - CHART_TOOLTIP_GAP;
+	const y = preferredTopY < CHART_PADDING.top ? pointItem.y + CHART_TOOLTIP_GAP : preferredTopY;
+	return { x, y };
+}
+
 // 부자계산기 화면을 렌더링합니다.
 export default function RichCalcPage() {
 	const [formState, setFormState] = useState<RichCalcFormState>(DEFAULT_FORM_STATE);
@@ -423,9 +449,9 @@ export default function RichCalcPage() {
 							<p className={styles.chartTotal}>{formatWon(result.summary.totalAmt)}</p>
 						</div>
 
-						<div className={styles.chartCanvas} role="img" aria-label="납입기간 동안의 연도별 예상 총 금액 그래프">
+						<div className={styles.chartCanvas}>
 							{chartGeometry.svgPointList.length > 0 ? (
-								<svg className={styles.chartSvg} viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} aria-hidden="true">
+								<svg className={styles.chartSvg} viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} aria-label="납입기간 동안의 연도별 예상 총 금액 그래프">
 									<defs>
 										<linearGradient id="richCalcAreaGradient" x1="0" x2="0" y1="0" y2="1">
 											<stop offset="0%" stopColor="#16a34a" stopOpacity="0.26" />
@@ -445,6 +471,31 @@ export default function RichCalcPage() {
 									{chartGeometry.svgPointList.map((pointItem) => (
 										<circle key={pointItem.year} cx={pointItem.x} cy={pointItem.y} r="4.8" className={styles.pointMark} />
 									))}
+									{chartGeometry.svgPointList.map((pointItem) => {
+										const tooltipPosition = buildTooltipPosition(pointItem);
+										return (
+											<g key={`tooltip-${pointItem.year}`} className={styles.tooltipPointGroup}>
+												<circle
+													cx={pointItem.x}
+													cy={pointItem.y}
+													r="13"
+													className={styles.tooltipHitCircle}
+													tabIndex={0}
+													role="button"
+													aria-label={formatChartTooltipLabel(pointItem)}
+												/>
+												<g className={styles.chartTooltipGroup} transform={`translate(${tooltipPosition.x} ${tooltipPosition.y})`} aria-hidden="true">
+													<rect width={CHART_TOOLTIP_WIDTH} height={CHART_TOOLTIP_HEIGHT} rx="8" />
+													<text x="14" y="22" className={styles.tooltipYear}>
+														{pointItem.year}년 후
+													</text>
+													<text x="14" y="43" className={styles.tooltipAmount}>
+														{formatWon(pointItem.totalAmt)}
+													</text>
+												</g>
+											</g>
+										);
+									})}
 									{chartGeometry.axisLabelPointList.map((pointItem) => (
 										<text key={pointItem.year} x={pointItem.x} y={CHART_HEIGHT - 12} className={styles.axisLabel}>
 											{pointItem.year}년
