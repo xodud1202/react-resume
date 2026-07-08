@@ -1,5 +1,19 @@
 .contentPanel {
-	min-height: calc(100vh - 2rem);
+	--total-stock-panel-padding-block: 2rem;
+	--total-stock-panel-gap-block: 1.4rem;
+	--total-stock-header-height: 2.5rem;
+	--total-stock-tab-height: 2.45rem;
+	--total-stock-table-shell-height: calc(
+		100vh
+		- var(--total-stock-panel-padding-block)
+		- var(--total-stock-panel-gap-block)
+		- var(--total-stock-header-height)
+		- var(--total-stock-tab-height)
+		- 2rem
+	);
+	align-content: start;
+	align-items: start;
+	grid-auto-rows: max-content;
 }
 
 .tabBar {
@@ -38,7 +52,8 @@
 }
 
 .monthlyScrollShell,
-.historyTableShell {
+.historyTableShell,
+.cashHistoryTableShell {
 	min-width: 0;
 	border: 1px solid var(--stock-sale-border);
 	border-radius: 8px;
@@ -46,8 +61,9 @@
 }
 
 .monthlyScrollShell {
+	height: var(--total-stock-table-shell-height);
 	overflow-x: auto;
-	overflow-y: visible;
+	overflow-y: auto;
 }
 
 .monthlyTable,
@@ -67,6 +83,45 @@
 .historyTable {
 	min-width: 48rem;
 	table-layout: fixed;
+}
+
+.accountHistoryTable {
+	width: 720px;
+	min-width: 720px;
+	max-width: 720px;
+}
+
+.accountHistoryDateColumn {
+	width: 120px;
+}
+
+.accountHistoryPrincipalColumn,
+.accountHistoryCheckColumn,
+.accountHistoryProfitColumn,
+.accountHistoryRateColumn {
+	width: 150px;
+}
+
+.cashHistoryTable {
+	width: 620px;
+	min-width: 620px;
+	max-width: 620px;
+}
+
+.cashHistoryDateColumn {
+	width: 120px;
+}
+
+.cashHistoryAccountColumn {
+	width: 200px;
+}
+
+.cashHistoryTypeColumn {
+	width: 100px;
+}
+
+.cashHistoryAmountColumn {
+	width: 150px;
 }
 
 .monthlyTable th,
@@ -95,6 +150,11 @@
 	overflow-x: auto;
 }
 
+.cashHistoryTableShell {
+	height: var(--total-stock-table-shell-height);
+	overflow: auto;
+}
+
 .historyTable tbody th {
 	color: var(--stock-sale-ink);
 	font-weight: 900;
@@ -103,6 +163,47 @@
 
 .historyTable td {
 	text-align: right;
+}
+
+.cashHistoryTable td {
+	text-align: center;
+}
+
+.cashHistoryTable td:last-child {
+	text-align: right;
+}
+
+.editableHistoryValueCell {
+	padding: 0;
+}
+
+.historyCheckAmountButton {
+	display: block;
+	width: 100%;
+	min-height: 2.35rem;
+	border: 0;
+	background: transparent;
+	color: var(--stock-sale-accent);
+	cursor: pointer;
+	font: inherit;
+	font-weight: 900;
+	font-variant-numeric: tabular-nums;
+	padding: 0 0.65rem;
+	text-align: right;
+	text-decoration: underline;
+	text-decoration-color: rgba(45, 212, 191, 0.45);
+	text-underline-offset: 0.18rem;
+}
+
+.historyCheckAmountButton:hover,
+.historyCheckAmountButton:focus-visible {
+	background: rgba(45, 212, 191, 0.1);
+	outline: none;
+}
+
+.historyCheckAmountButton:disabled {
+	cursor: not-allowed;
+	opacity: 0.55;
 }
 
 .groupHeaderCell,
@@ -195,6 +296,18 @@ thead .stickyLabelCell {
 	padding: 0.85rem;
 }
 
+.scrollLoadingText {
+	position: sticky;
+	bottom: 0;
+	border-top: 1px solid var(--stock-sale-border);
+	background: rgba(2, 6, 23, 0.94);
+	color: var(--stock-sale-muted);
+	font-size: 0.82rem;
+	font-weight: 900;
+	padding: 0.75rem;
+	text-align: center;
+}
+
 .checkAmountFormGrid {
 	grid-template-columns: minmax(0, 1fr);
 }
@@ -254,10 +367,6 @@ thead .stickyLabelCell {
 }
 
 @media (max-width: 1024px) {
-	.contentPanel {
-		min-height: auto;
-	}
-
 	.tabBar {
 		width: 100%;
 	}
@@ -266,6 +375,16 @@ thead .stickyLabelCell {
 		flex: 1 1 0;
 		padding: 0 0.55rem;
 		white-space: normal;
+	}
+
+	.cashHistoryTableShell {
+		height: auto;
+		max-height: none;
+	}
+
+	.monthlyScrollShell {
+		height: auto;
+		max-height: none;
 	}
 
 	.checkAmountEntryHeader,

@@ -1,19 +1,21 @@
 import Head from "next/head";
 import { useRouter } from "next/router";
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ChangeEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ChangeEvent, type FormEvent, type UIEvent } from "react";
 import FeedbackLayer from "@/components/common/FeedbackLayer";
 import useFeedbackLayer from "@/components/common/useFeedbackLayer";
 import useResizableSplitLayout from "@/components/common/useResizableSplitLayout";
 import type {
 	TotalStockCashHistoryCreateRequest,
+	TotalStockCashHistoryRow,
 	TotalStockCheckAmountSaveRequest,
+	TotalStockDailyHistoryRow,
 	TotalStockHistoryResponse,
 	TotalStockHistoryValueRow,
 } from "@/components/stock-total/types";
 import type { StockSaleBootstrapResponse, StockSaleCreateRequest, StockSaleOption } from "@/components/stock-sale/types";
 import AdminDateInput from "@/components/work/AdminDateInput";
 import { createStockSaleHistory, fetchStockSaleBootstrap } from "@/services/stockSaleApiService";
-import { createTotalStockCashHistory, fetchTotalStockHistory, saveTotalStockCheckAmount } from "@/services/stockAccountHistoryApiService";
+import { createTotalStockCashHistory, fetchTotalStockHistory, saveTotalStockCheckAmount, updateTotalStockCashHistory } from "@/services/stockAccountHistoryApiService";
 import { logoutWork, refreshWorkSession } from "@/services/workApiService";
 import stockStyles from "@/components/stock-sale/StockSaleHistoryPage.module.css";
 import styles from "./TotalStockHistoryPage.module.css";
@@ -21,7 +23,7 @@ import styles from "./TotalStockHistoryPage.module.css";
 const TOTAL_STOCK_PAGE_PATH = "/work/totalstock";
 const ACCOUNT_FAVORITE_STORAGE_KEY = "react-resume:stock-sale:favorite-account-codes";
 
-type TotalStockTabType = "monthly" | "history";
+type TotalStockTabType = "monthly" | "history" | "cashHistory";
 
 interface OptionButtonListProps {
 	// 선택 목록 제목입니다.
@@ -65,6 +67,8 @@ interface CheckAmountFormState {
 }
 
 interface CashHistoryFormState {
+	// 입출금 이력 식별자입니다.
+	cashHistSeq: number | null;
 	// 입출금일입니다.
 	cashDt: string;
 	// 입출금 계좌 코드입니다.
@@ -85,6 +89,9 @@ function createEmptyTotalStockHistoryResponse(): TotalStockHistoryResponse {
 		historyTotalCount: 0,
 		historyPageSize: 50,
 		historyHasMore: false,
+		cashHistoryRowList: [],
+		cashHistoryPageSize: 50,
+		cashHistoryHasMore: false,
 	};
 }
 
@@ -339,6 +346,17 @@ function buildInitialCheckAmountFormState(accountOptionList: StockSaleOption[]):
 	};
 }
 
+// 확인일별 이력 행으로 계좌 확인 평가금 수정 상태를 생성합니다.
+function buildEditCheckAmountFormState(historyRow: TotalStockDailyHistoryRow, accountOptionList: StockSaleOption[]): CheckAmountFormState {
+	return {
+		checkDt: historyRow.checkDt,
+		stockTotalAmtMap: Object.fromEntries(accountOptionList.map((optionItem) => {
+			const stockTotalAmt = historyRow.checkAccountAmountMap[optionItem.cd] ?? 0;
+			return [optionItem.cd, formatIntegerInputValue(String(stockTotalAmt), false)];
+		})),
+	};
+}
+
 // 계좌 확인 평가금 입력 상태를 활성 계좌 전체 API 요청 목록으로 변환합니다.
 function buildCheckAmountSaveRequestList(
 	formState: CheckAmountFormState,
@@ -498,8 +516,10 @@ export default function TotalStockHistoryPage() {
 	const [isCreateSaving, setIsCreateSaving] = useState(false);
 	const [isCheckAmountLayerOpen, setIsCheckAmountLayerOpen] = useState(false);
 	const [isCheckAmountSaving, setIsCheckAmountSaving] = useState(false);
+	const [isCheckAmountDateLocked, setIsCheckAmountDateLocked] = useState(false);
 	const [isCashHistoryLayerOpen, setIsCashHistoryLayerOpen] = useState(false);
 	const [isCashHistorySaving, setIsCashHistorySaving] = useState(false);
+	const [isCashHistoryEditMode, setIsCashHistoryEditMode] = useState(false);
 	const [activeTab, setActiveTab] = useState<TotalStockTabType>("monthly");
 	const [bootstrap, setBootstrap] = useState<StockSaleBootstrapResponse | null>(null);
 	const [historyResponse, setHistoryResponse] = useState<TotalStockHistoryResponse>(createEmptyTotalStockHistoryResponse);
@@ -519,6 +539,7 @@ export default function TotalStockHistoryPage() {
 		stockTotalAmtMap: {},
 	});
 	const [cashHistoryFormState, setCashHistoryFormState] = useState<CashHistoryFormState>({
+		cashHistSeq: null,
 		cashDt: getTodayDateInputValue(),
 		stockAccountCd: "",
 		cashInOutCd: "",
@@ -542,7 +563,7 @@ export default function TotalStockHistoryPage() {
 		: isCheckAmountSaving
 			? "계좌확인금액을 저장하고 있습니다."
 			: isCashHistorySaving
-				? "입출금 내역을 등록하고 있습니다."
+				? isCashHistoryEditMode ? "입출금 내역을 수정하고 있습니다." : "입출금 내역을 등록하고 있습니다."
 		: isCreateSaving
 			? "매매일지를 등록하고 있습니다."
 			: "주식계좌이력을 조회하고 있습니다.";
@@ -552,12 +573,15 @@ export default function TotalStockHistoryPage() {
 		nextAccountCodeList: string[],
 		historyOffset: number,
 		appendHistory: boolean,
+		cashHistoryOffset = 0,
+		appendCashHistory = false,
 	) => {
 		setIsListLoading(true);
 		try {
 			const result = await fetchTotalStockHistory({
 				stockAccountCdList: nextAccountCodeList,
 				historyOffset,
+				cashHistoryOffset,
 			});
 			if (!result.ok || !result.data) {
 				if (result.status === 401 || result.status === 403) {
@@ -570,12 +594,22 @@ export default function TotalStockHistoryPage() {
 
 			const nextHistoryResponse = result.data;
 			setHistoryResponse((prevState) => {
-				if (!appendHistory) {
+				if (!appendHistory && !appendCashHistory) {
 					return nextHistoryResponse;
 				}
 				return {
 					...nextHistoryResponse,
-					historyRowList: [...prevState.historyRowList, ...nextHistoryResponse.historyRowList],
+					historyRowList: appendHistory
+						? [...prevState.historyRowList, ...nextHistoryResponse.historyRowList]
+						: prevState.historyRowList,
+					historyTotalCount: appendCashHistory ? prevState.historyTotalCount : nextHistoryResponse.historyTotalCount,
+					historyPageSize: appendCashHistory ? prevState.historyPageSize : nextHistoryResponse.historyPageSize,
+					historyHasMore: appendCashHistory ? prevState.historyHasMore : nextHistoryResponse.historyHasMore,
+					cashHistoryRowList: appendCashHistory
+						? [...prevState.cashHistoryRowList, ...nextHistoryResponse.cashHistoryRowList]
+						: prevState.cashHistoryRowList,
+					cashHistoryPageSize: appendHistory ? prevState.cashHistoryPageSize : nextHistoryResponse.cashHistoryPageSize,
+					cashHistoryHasMore: appendHistory ? prevState.cashHistoryHasMore : nextHistoryResponse.cashHistoryHasMore,
 				};
 			});
 		} finally {
@@ -650,6 +684,23 @@ export default function TotalStockHistoryPage() {
 		void loadTotalStockHistory(selectedAccountCodeList, historyResponse.historyRowList.length, true);
 	};
 
+	// 스크롤 하단 접근 시 입출금 이력을 추가 조회합니다.
+	const handleLoadMoreCashHistory = () => {
+		if (isListLoading || !historyResponse.cashHistoryHasMore) {
+			return;
+		}
+		void loadTotalStockHistory(selectedAccountCodeList, 0, false, historyResponse.cashHistoryRowList.length, true);
+	};
+
+	// 입출금 이력 스크롤 위치를 확인해 더보기 조회를 실행합니다.
+	const handleCashHistoryScroll = (event: UIEvent<HTMLDivElement>) => {
+		const { scrollTop, scrollHeight, clientHeight } = event.currentTarget;
+		if (scrollHeight - scrollTop - clientHeight > 80) {
+			return;
+		}
+		handleLoadMoreCashHistory();
+	};
+
 	// 매매일지 화면으로 이동합니다.
 	const handleMoveStockSalePage = () => {
 		void router.push("/work/stock");
@@ -658,6 +709,14 @@ export default function TotalStockHistoryPage() {
 	// 계좌확인금액입력 레이어를 열고 기본 입력값을 채웁니다.
 	const handleOpenCheckAmountLayer = () => {
 		setCheckAmountFormState(buildInitialCheckAmountFormState(accountOptionList));
+		setIsCheckAmountDateLocked(false);
+		setIsCheckAmountLayerOpen(true);
+	};
+
+	// 확인일별 이력 행의 확인 평가금 수정 레이어를 엽니다.
+	const handleOpenCheckAmountEditLayer = (historyRow: TotalStockDailyHistoryRow) => {
+		setCheckAmountFormState(buildEditCheckAmountFormState(historyRow, accountOptionList));
+		setIsCheckAmountDateLocked(true);
 		setIsCheckAmountLayerOpen(true);
 	};
 
@@ -667,10 +726,14 @@ export default function TotalStockHistoryPage() {
 			return;
 		}
 		setIsCheckAmountLayerOpen(false);
+		setIsCheckAmountDateLocked(false);
 	};
 
 	// 계좌확인금액입력 날짜를 갱신합니다.
 	const handleCheckAmountDateChange = (event: ChangeEvent<HTMLInputElement>) => {
+		if (isCheckAmountDateLocked) {
+			return;
+		}
 		setCheckAmountFormState((prevState) => ({
 			...prevState,
 			checkDt: event.target.value,
@@ -710,6 +773,7 @@ export default function TotalStockHistoryPage() {
 				return;
 			}
 			setIsCheckAmountLayerOpen(false);
+			setIsCheckAmountDateLocked(false);
 			showSuccess(result.data?.message || "계좌확인금액을 저장했습니다.");
 			await loadTotalStockHistory(selectedAccountCodeList, 0, false);
 		} finally {
@@ -720,11 +784,26 @@ export default function TotalStockHistoryPage() {
 	// 입출금 등록 레이어를 열고 기본 입력값을 채웁니다.
 	const handleOpenCashHistoryLayer = () => {
 		setCashHistoryFormState({
+			cashHistSeq: null,
 			cashDt: getTodayDateInputValue(),
 			stockAccountCd: selectedAccountCodeList[0] ?? accountOptionList[0]?.cd ?? "",
 			cashInOutCd: cashInOutOptionList[0]?.cd ?? "",
 			cashAmt: "",
 		});
+		setIsCashHistoryEditMode(false);
+		setIsCashHistoryLayerOpen(true);
+	};
+
+	// 입출금 목록 행의 수정 레이어를 엽니다.
+	const handleOpenCashHistoryEditLayer = (cashHistoryRow: TotalStockCashHistoryRow) => {
+		setCashHistoryFormState({
+			cashHistSeq: cashHistoryRow.cashHistSeq,
+			cashDt: cashHistoryRow.cashDt || getTodayDateInputValue(),
+			stockAccountCd: cashHistoryRow.stockAccountCd,
+			cashInOutCd: cashHistoryRow.cashInOutCd,
+			cashAmt: formatIntegerInputValue(String(cashHistoryRow.cashAmt), false),
+		});
+		setIsCashHistoryEditMode(true);
 		setIsCashHistoryLayerOpen(true);
 	};
 
@@ -734,6 +813,7 @@ export default function TotalStockHistoryPage() {
 			return;
 		}
 		setIsCashHistoryLayerOpen(false);
+		setIsCashHistoryEditMode(false);
 	};
 
 	// 입출금 등록 입력값을 갱신합니다.
@@ -750,19 +830,27 @@ export default function TotalStockHistoryPage() {
 		event.preventDefault();
 		const command = buildCashHistoryCreateRequest(cashHistoryFormState);
 		if (!command) {
-			showError("입출금 등록 입력값을 확인해주세요.");
+			showError(isCashHistoryEditMode ? "입출금 수정 입력값을 확인해주세요." : "입출금 등록 입력값을 확인해주세요.");
+			return;
+		}
+
+		if (isCashHistoryEditMode && !cashHistoryFormState.cashHistSeq) {
+			showError("수정할 입출금 내역을 확인해주세요.");
 			return;
 		}
 
 		setIsCashHistorySaving(true);
 		try {
-			const result = await createTotalStockCashHistory(command);
+			const result = isCashHistoryEditMode && cashHistoryFormState.cashHistSeq
+				? await updateTotalStockCashHistory(cashHistoryFormState.cashHistSeq, command)
+				: await createTotalStockCashHistory(command);
 			if (!result.ok) {
-				showError(result.message || "입출금 내역 등록에 실패했습니다.");
+				showError(result.message || (isCashHistoryEditMode ? "입출금 내역 수정에 실패했습니다." : "입출금 내역 등록에 실패했습니다."));
 				return;
 			}
 			setIsCashHistoryLayerOpen(false);
-			showSuccess(result.data?.message || "입출금 내역을 등록했습니다.");
+			setIsCashHistoryEditMode(false);
+			showSuccess(result.data?.message || (isCashHistoryEditMode ? "입출금 내역을 수정했습니다." : "입출금 내역을 등록했습니다."));
 			await loadTotalStockHistory(selectedAccountCodeList, 0, false);
 		} finally {
 			setIsCashHistorySaving(false);
@@ -934,6 +1022,15 @@ export default function TotalStockHistoryPage() {
 								>
 									계좌별 전체 이력 정보
 								</button>
+								<button
+									type="button"
+									className={`${styles.tabButton} ${activeTab === "cashHistory" ? styles.tabButtonActive : ""}`}
+									onClick={() => setActiveTab("cashHistory")}
+									role="tab"
+									aria-selected={activeTab === "cashHistory"}
+								>
+									입출금내역
+								</button>
 							</div>
 
 							{activeTab === "monthly" ? (
@@ -997,9 +1094,16 @@ export default function TotalStockHistoryPage() {
 										</tbody>
 									</table>
 								</div>
-							) : (
+							) : activeTab === "history" ? (
 								<div className={styles.historyTableShell}>
-									<table className={styles.historyTable}>
+									<table className={`${styles.historyTable} ${styles.accountHistoryTable}`}>
+										<colgroup>
+											<col className={styles.accountHistoryDateColumn} />
+											<col className={styles.accountHistoryPrincipalColumn} />
+											<col className={styles.accountHistoryCheckColumn} />
+											<col className={styles.accountHistoryProfitColumn} />
+											<col className={styles.accountHistoryRateColumn} />
+										</colgroup>
 										<thead>
 											<tr>
 												<th>확인일</th>
@@ -1014,7 +1118,17 @@ export default function TotalStockHistoryPage() {
 												<tr key={historyRow.checkDt}>
 													<th>{historyRow.checkDt}</th>
 													<td>{formatNumber(historyRow.principalAmt)}</td>
-													<td>{formatNumber(historyRow.checkAmt)}</td>
+													<td className={styles.editableHistoryValueCell}>
+														<button
+															type="button"
+															className={styles.historyCheckAmountButton}
+															onClick={() => handleOpenCheckAmountEditLayer(historyRow)}
+															disabled={isCheckAmountSaving}
+															aria-label={`${historyRow.checkDt} 확인 평가금 수정`}
+														>
+															{formatNumber(historyRow.checkAmt)}
+														</button>
+													</td>
 													<td className={historyRow.profitAmt > 0 ? stockStyles.positiveAmount : historyRow.profitAmt < 0 ? stockStyles.negativeAmount : ""}>
 														{formatNumber(historyRow.profitAmt)}
 													</td>
@@ -1040,6 +1154,55 @@ export default function TotalStockHistoryPage() {
 										</div>
 									) : null}
 								</div>
+							) : (
+								<div className={styles.cashHistoryTableShell} onScroll={handleCashHistoryScroll}>
+									<table className={`${styles.historyTable} ${styles.cashHistoryTable}`}>
+										<colgroup>
+											<col className={styles.cashHistoryDateColumn} />
+											<col className={styles.cashHistoryAccountColumn} />
+											<col className={styles.cashHistoryTypeColumn} />
+											<col className={styles.cashHistoryAmountColumn} />
+										</colgroup>
+										<thead>
+											<tr>
+												<th>입출금일</th>
+												<th>계좌</th>
+												<th>구분</th>
+												<th>금액</th>
+											</tr>
+										</thead>
+										<tbody>
+											{historyResponse.cashHistoryRowList.map((cashHistoryRow) => (
+												<tr key={cashHistoryRow.cashHistSeq}>
+													<th>{cashHistoryRow.cashDt}</th>
+													<td>{cashHistoryRow.stockAccountNm}</td>
+													<td>{cashHistoryRow.cashInOutNm}</td>
+													<td className={styles.editableHistoryValueCell}>
+														<button
+															type="button"
+															className={styles.historyCheckAmountButton}
+															onClick={() => handleOpenCashHistoryEditLayer(cashHistoryRow)}
+															disabled={isCashHistorySaving}
+															aria-label={`${cashHistoryRow.cashDt} ${cashHistoryRow.stockAccountNm} 입출금 수정`}
+														>
+															{formatNumber(cashHistoryRow.cashAmt)}
+														</button>
+													</td>
+												</tr>
+											))}
+											{historyResponse.cashHistoryRowList.length === 0 ? (
+												<tr>
+													<td className={styles.emptyTableCell} colSpan={4}>
+														조회 결과가 없습니다.
+													</td>
+												</tr>
+											) : null}
+										</tbody>
+									</table>
+									{isListLoading && historyResponse.cashHistoryHasMore ? (
+										<div className={styles.scrollLoadingText}>불러오는 중입니다.</div>
+									) : null}
+								</div>
 							)}
 						</section>
 					</main>
@@ -1052,7 +1215,7 @@ export default function TotalStockHistoryPage() {
 						<div className={stockStyles.modalHeader}>
 							<div>
 								<p className={stockStyles.eyebrow}>stock check</p>
-								<h2 id="totalStockCheckAmountTitle" className={stockStyles.contentTitle}>계좌확인금액입력</h2>
+								<h2 id="totalStockCheckAmountTitle" className={stockStyles.contentTitle}>{isCheckAmountDateLocked ? "계좌확인금액수정" : "계좌확인금액입력"}</h2>
 							</div>
 							<button type="button" className={stockStyles.modalCloseButton} onClick={handleCloseCheckAmountLayer} disabled={isCheckAmountSaving} aria-label="계좌확인금액입력 닫기">
 								×
@@ -1062,7 +1225,7 @@ export default function TotalStockHistoryPage() {
 						<div className={`${stockStyles.createFormGrid} ${styles.checkAmountFormGrid}`}>
 							<label className={`${stockStyles.fieldLabel} ${styles.checkAmountDateField}`}>
 								확인일
-								<AdminDateInput name="checkDt" value={checkAmountFormState.checkDt} onChange={handleCheckAmountDateChange} disabled={isCheckAmountSaving} />
+								<AdminDateInput name="checkDt" value={checkAmountFormState.checkDt} onChange={handleCheckAmountDateChange} disabled={isCheckAmountSaving} readOnly={isCheckAmountDateLocked} />
 							</label>
 							<div className={styles.checkAmountEntryShell}>
 								<div className={styles.checkAmountEntryHeader}>
@@ -1109,9 +1272,9 @@ export default function TotalStockHistoryPage() {
 						<div className={stockStyles.modalHeader}>
 							<div>
 								<p className={stockStyles.eyebrow}>cash history</p>
-								<h2 id="totalStockCashHistoryTitle" className={stockStyles.contentTitle}>입출금 등록</h2>
+								<h2 id="totalStockCashHistoryTitle" className={stockStyles.contentTitle}>{isCashHistoryEditMode ? "입출금 수정" : "입출금 등록"}</h2>
 							</div>
-							<button type="button" className={stockStyles.modalCloseButton} onClick={handleCloseCashHistoryLayer} disabled={isCashHistorySaving} aria-label="입출금 등록 닫기">
+							<button type="button" className={stockStyles.modalCloseButton} onClick={handleCloseCashHistoryLayer} disabled={isCashHistorySaving} aria-label={isCashHistoryEditMode ? "입출금 수정 닫기" : "입출금 등록 닫기"}>
 								×
 							</button>
 						</div>
@@ -1150,7 +1313,7 @@ export default function TotalStockHistoryPage() {
 								취소
 							</button>
 							<button type="submit" className={stockStyles.secondaryButton} disabled={isCashHistorySaving}>
-								등록
+								{isCashHistoryEditMode ? "수정" : "등록"}
 							</button>
 						</div>
 					</form>

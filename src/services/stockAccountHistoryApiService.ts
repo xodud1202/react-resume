@@ -1,5 +1,6 @@
 import type {
 	TotalStockDailyHistoryRow,
+	TotalStockCashHistoryRow,
 	TotalStockCashHistoryCreateRequest,
 	TotalStockCheckAmountSaveRequest,
 	TotalStockHistoryAccountGroup,
@@ -55,6 +56,9 @@ function toTotalStockHistoryQueryString(filter: TotalStockHistoryFilter): string
 	if (typeof filter.historyOffset === "number" && filter.historyOffset > 0) {
 		searchParams.set("historyOffset", String(filter.historyOffset));
 	}
+	if (typeof filter.cashHistoryOffset === "number" && filter.cashHistoryOffset > 0) {
+		searchParams.set("cashHistoryOffset", String(filter.cashHistoryOffset));
+	}
 	for (const accountCode of filter.stockAccountCdList ?? []) {
 		if (accountCode.trim() !== "") {
 			searchParams.append("stockAccountCdList", accountCode.trim());
@@ -99,6 +103,20 @@ function normalizeDailyHistoryRow(row: Partial<TotalStockDailyHistoryRow> | null
 		checkAmt: resolveNumberValue(row?.checkAmt),
 		profitAmt: resolveNumberValue(row?.profitAmt),
 		profitRate: resolveNumberValue(row?.profitRate),
+		checkAccountAmountMap: normalizeNumberMap(row?.checkAccountAmountMap),
+	};
+}
+
+// 입출금 이력 행 응답을 화면 기본값으로 정규화합니다.
+function normalizeCashHistoryRow(row: Partial<TotalStockCashHistoryRow> | null | undefined): TotalStockCashHistoryRow {
+	return {
+		cashHistSeq: resolveNumberValue(row?.cashHistSeq),
+		cashDt: resolveStringValue(row?.cashDt),
+		stockAccountCd: resolveStringValue(row?.stockAccountCd),
+		stockAccountNm: resolveStringValue(row?.stockAccountNm),
+		cashInOutCd: resolveStringValue(row?.cashInOutCd),
+		cashInOutNm: resolveStringValue(row?.cashInOutNm),
+		cashAmt: resolveNumberValue(row?.cashAmt),
 	};
 }
 
@@ -112,6 +130,9 @@ function normalizeTotalStockHistoryResponse(data: Partial<TotalStockHistoryRespo
 		historyTotalCount: resolveNumberValue(data?.historyTotalCount),
 		historyPageSize: resolveNumberValue(data?.historyPageSize),
 		historyHasMore: resolveBooleanValue(data?.historyHasMore),
+		cashHistoryRowList: resolveArrayValue(data?.cashHistoryRowList).map((rowItem) => normalizeCashHistoryRow(rowItem)),
+		cashHistoryPageSize: resolveNumberValue(data?.cashHistoryPageSize),
+		cashHistoryHasMore: resolveBooleanValue(data?.cashHistoryHasMore),
 	};
 }
 
@@ -139,6 +160,14 @@ export async function saveTotalStockCheckAmount(commandList: TotalStockCheckAmou
 export async function createTotalStockCashHistory(command: TotalStockCashHistoryCreateRequest): Promise<WorkClientApiResult<TotalStockSaveResponse>> {
 	return requestWorkClientApi<TotalStockSaveResponse>("/api/work/stock-account-history/cash-history", {
 		method: "POST",
+		body: command,
+	});
+}
+
+// 계좌 입출금 내역을 수정합니다.
+export async function updateTotalStockCashHistory(cashHistSeq: number, command: TotalStockCashHistoryCreateRequest): Promise<WorkClientApiResult<TotalStockSaveResponse>> {
+	return requestWorkClientApi<TotalStockSaveResponse>(`/api/work/stock-account-history/cash-history/${cashHistSeq}`, {
+		method: "PUT",
 		body: command,
 	});
 }

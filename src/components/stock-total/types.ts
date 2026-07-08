@@ -40,6 +40,26 @@ export interface TotalStockDailyHistoryRow {
 	profitAmt: number;
 	// 원금대비 손익율입니다.
 	profitRate: number;
+	// 확인일의 계좌별 확인 평가금 Map입니다.
+	checkAccountAmountMap: Record<string, number>;
+}
+
+// 주식계좌 입출금 이력 행을 정의합니다.
+export interface TotalStockCashHistoryRow {
+	// 입출금 이력 식별자입니다.
+	cashHistSeq: number;
+	// 입출금일입니다.
+	cashDt: string;
+	// 주식 계좌 코드입니다.
+	stockAccountCd: string;
+	// 주식 계좌명입니다.
+	stockAccountNm: string;
+	// 입출금구분 코드입니다.
+	cashInOutCd: string;
+	// 입출금구분 이름입니다.
+	cashInOutNm: string;
+	// 입출금액입니다.
+	cashAmt: number;
 }
 
 // 주식계좌이력 조회 응답을 정의합니다.
@@ -58,6 +78,12 @@ export interface TotalStockHistoryResponse {
 	historyPageSize: number;
 	// 확인일별 더보기 존재 여부입니다.
 	historyHasMore: boolean;
+	// 입출금 이력 목록입니다.
+	cashHistoryRowList: TotalStockCashHistoryRow[];
+	// 입출금 이력 페이지 크기입니다.
+	cashHistoryPageSize: number;
+	// 입출금 이력 더보기 존재 여부입니다.
+	cashHistoryHasMore: boolean;
 }
 
 // 주식계좌이력 조회 조건을 정의합니다.
@@ -66,6 +92,8 @@ export interface TotalStockHistoryFilter {
 	stockAccountCdList?: string[];
 	// 확인일별 이력 시작 위치입니다.
 	historyOffset?: number;
+	// 입출금 이력 시작 위치입니다.
+	cashHistoryOffset?: number;
 }
 
 // 계좌 확인 평가금 저장 요청 행을 정의합니다.
