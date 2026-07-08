@@ -9,6 +9,8 @@ import type {
 	StockSaleOption,
 	StockSaleRow,
 	StockSaleSummaryRow,
+	StockSaleUpdateRequest,
+	StockSaleUpdateResponse,
 } from "@/components/stock-sale/types";
 import type { WorkClientApiResult } from "@/services/workApiService";
 import { requestWorkClientApi } from "@/services/workApiService";
@@ -169,6 +171,14 @@ export async function fetchStockSaleList(filter: StockSaleListFilter): Promise<W
 // 매매일지 거래 이력을 등록합니다.
 export async function createStockSaleHistory(command: StockSaleCreateRequest): Promise<WorkClientApiResult<StockSaleCreateResponse>> {
 	return requestWorkClientApi<StockSaleCreateResponse>("/api/work/stock-sale-history", {
+		method: "POST",
+		body: command,
+	});
+}
+
+// 매매일지 거래 이력을 수정합니다.
+export async function updateStockSaleHistory(command: StockSaleUpdateRequest): Promise<WorkClientApiResult<StockSaleUpdateResponse>> {
+	return requestWorkClientApi<StockSaleUpdateResponse>("/api/work/stock-sale-history/update", {
 		method: "POST",
 		body: command,
 	});

@@ -56,6 +56,18 @@ export interface StockSaleCreateResponse {
 	message: string;
 }
 
+// 매매일지 거래 수정 요청을 정의합니다.
+export interface StockSaleUpdateRequest extends StockSaleCreateRequest {
+	// 매매 이력 번호입니다.
+	saleHistSeq: number;
+}
+
+// 매매일지 거래 수정 응답을 정의합니다.
+export interface StockSaleUpdateResponse {
+	// 처리 메시지입니다.
+	message: string;
+}
+
 // 매매일지 선택 항목 노출순서 저장 대상입니다.
 export interface StockSaleDisplayOrderItem {
 	// 공통코드입니다.

@@ -2,13 +2,13 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
 import { AgGridReact } from "ag-grid-react";
-import { AllCommunityModule, ModuleRegistry, type CellClassParams, type ColDef, type ValueFormatterParams, type ValueGetterParams } from "ag-grid-community";
+import { AllCommunityModule, ModuleRegistry, type CellClassParams, type CellClickedEvent, type ColDef, type ValueFormatterParams, type ValueGetterParams } from "ag-grid-community";
 import FeedbackLayer from "@/components/common/FeedbackLayer";
 import useFeedbackLayer from "@/components/common/useFeedbackLayer";
 import useResizableSplitLayout from "@/components/common/useResizableSplitLayout";
 import AdminDateInput from "@/components/work/AdminDateInput";
-import type { StockSaleBootstrapResponse, StockSaleCreateRequest, StockSaleDisplayOrderUpdateRequest, StockSaleListResponse, StockSaleOption, StockSaleRow, StockSaleSummaryRow } from "@/components/stock-sale/types";
-import { createStockSaleHistory, fetchStockSaleBootstrap, fetchStockSaleList, updateStockSaleDisplayOrder } from "@/services/stockSaleApiService";
+import type { StockSaleBootstrapResponse, StockSaleCreateRequest, StockSaleDisplayOrderUpdateRequest, StockSaleListResponse, StockSaleOption, StockSaleRow, StockSaleSummaryRow, StockSaleUpdateRequest } from "@/components/stock-sale/types";
+import { createStockSaleHistory, fetchStockSaleBootstrap, fetchStockSaleList, updateStockSaleDisplayOrder, updateStockSaleHistory } from "@/services/stockSaleApiService";
 import { logoutWork, refreshWorkSession } from "@/services/workApiService";
 import styles from "./StockSaleHistoryPage.module.css";
 
@@ -80,6 +80,15 @@ interface StockSaleCreateFormState {
 	saleAmt: string;
 	// 메모 입력값입니다.
 	memo: string;
+}
+
+interface StockSaleEditFormState extends StockSaleCreateFormState {
+	// 매매 이력 번호입니다.
+	saleHistSeq: number;
+	// 거래단가 입력값입니다.
+	unitPrice: string;
+	// 기존 손익금액입니다.
+	profitAmt: number;
 }
 
 // returnUrl을 업무 하위 경로로만 제한합니다.
@@ -257,6 +266,16 @@ function parseIntegerInputValue(value: string): number | null {
 	return parsedValue;
 }
 
+// 문자열 단가 입력값을 소수 허용 숫자로 변환합니다.
+function parseDecimalInputValue(value: string): number | null {
+	const normalizedValue = removeAmountGroupSeparator(value);
+	if (normalizedValue === "" || normalizedValue === "-") {
+		return null;
+	}
+	const parsedValue = Number(normalizedValue);
+	return Number.isFinite(parsedValue) ? parsedValue : null;
+}
+
 // 금액 입력값을 천 단위 구분자가 있는 입력 문자열로 변환합니다.
 function formatIntegerInputValue(value: string, allowNegative: boolean): string {
 	const normalizedValue = removeAmountGroupSeparator(value);
@@ -269,8 +288,51 @@ function formatIntegerInputValue(value: string, allowNegative: boolean): string 
 	return isNegative ? `-${formattedValue}` : formattedValue;
 }
 
-// 등록 폼의 필수 입력값과 거래 방향별 금액 규칙 안내 문구를 생성합니다.
-function resolveStockSaleCreateValidationMessage(formState: StockSaleCreateFormState): string {
+// 단가 입력값을 천 단위 구분자가 있는 소수 입력 문자열로 변환합니다.
+function formatDecimalInputValue(value: string, allowNegative: boolean): string {
+	const normalizedValue = removeAmountGroupSeparator(value);
+	const isNegative = allowNegative && normalizedValue.startsWith("-");
+	const unsignedValue = normalizedValue.replace(/-/g, "").replace(/[^\d.]/g, "");
+	const [integerPart = "", ...decimalPartList] = unsignedValue.split(".");
+	const integerDigits = integerPart.replace(/\D/g, "");
+	const decimalDigits = decimalPartList.join("").replace(/\D/g, "").slice(0, 2);
+	if (integerDigits === "" && decimalDigits === "") {
+		return isNegative ? "-" : "";
+	}
+	const formattedInteger = new Intl.NumberFormat("ko-KR").format(Number(integerDigits || "0"));
+	const formattedValue = unsignedValue.includes(".") ? `${formattedInteger}.${decimalDigits}` : formattedInteger;
+	return isNegative ? `-${formattedValue}` : formattedValue;
+}
+
+// 단가 숫자 값을 화면 입력 문자열로 변환합니다.
+function formatUnitPriceInputValue(value: number | null | undefined): string {
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		return "";
+	}
+	return new Intl.NumberFormat("ko-KR", {
+		maximumFractionDigits: 2,
+	}).format(value);
+}
+
+// 거래수와 거래금액으로 거래단가 입력값을 계산합니다.
+function buildUnitPriceInputValue(saleAmt: number | null, saleCnt: number | null): string {
+	if (!saleAmt || !saleCnt) {
+		return "";
+	}
+	return formatUnitPriceInputValue(Math.abs(saleAmt / saleCnt));
+}
+
+// 거래수 방향에 맞춰 거래단가에서 거래금액을 계산합니다.
+function calculateSaleAmountByUnitPrice(saleCnt: number | null, unitPrice: number | null): number | null {
+	if (!saleCnt || saleCnt === 0 || unitPrice === null || unitPrice <= 0) {
+		return null;
+	}
+	const sign = saleCnt < 0 ? -1 : 1;
+	return Math.round(Math.abs(saleCnt) * unitPrice) * sign;
+}
+
+// 폼의 필수 입력값과 거래 방향별 금액 규칙 안내 문구를 생성합니다.
+function resolveStockSaleFormValidationMessage(formState: StockSaleCreateFormState): string {
 	const isSaleCntMissing = removeAmountGroupSeparator(formState.saleCnt) === "";
 	const isSaleAmtMissing = removeAmountGroupSeparator(formState.saleAmt) === "";
 	if (isSaleCntMissing && isSaleAmtMissing) {
@@ -312,6 +374,85 @@ function buildStockSaleCreateRequest(formState: StockSaleCreateFormState): Stock
 		profitAmt: 0,
 		memo: formState.memo,
 	};
+}
+
+// 상세 거래 행을 수정 폼 상태로 변환합니다.
+function buildStockSaleEditFormState(row: StockSaleRow): StockSaleEditFormState {
+	const unitPrice = calculateStockSaleUnitPrice(row);
+	return {
+		saleHistSeq: row.saleHistSeq,
+		saleDt: row.saleDt,
+		stockAccountCd: row.stockAccountCd,
+		stockNmCd: row.stockNmCd,
+		saleCnt: String(row.saleCnt),
+		saleAmt: formatIntegerInputValue(String(row.saleAmt), true),
+		unitPrice: formatUnitPriceInputValue(unitPrice === null ? null : Math.abs(unitPrice)),
+		profitAmt: row.profitAmt,
+		memo: row.memo,
+	};
+}
+
+// 수정 폼 상태를 API 요청 값으로 변환합니다.
+function buildStockSaleUpdateRequest(formState: StockSaleEditFormState): StockSaleUpdateRequest | null {
+	const saleCnt = parseIntegerInputValue(formState.saleCnt);
+	const saleAmt = parseIntegerInputValue(formState.saleAmt);
+	if (formState.saleHistSeq <= 0 || formState.saleDt.trim() === "" || formState.stockAccountCd.trim() === "" || formState.stockNmCd.trim() === "" || !saleCnt || !saleAmt) {
+		return null;
+	}
+	return {
+		saleHistSeq: formState.saleHistSeq,
+		saleDt: formState.saleDt,
+		stockAccountCd: formState.stockAccountCd,
+		stockNmCd: formState.stockNmCd,
+		saleCnt,
+		saleAmt,
+		profitAmt: saleCnt > 0 ? 0 : formState.profitAmt,
+		memo: formState.memo,
+	};
+}
+
+// 수정 폼 입력값 변경 시 거래금액과 거래단가 표시를 서로 맞춥니다.
+function buildNextStockSaleEditFormState(prevState: StockSaleEditFormState, name: string, value: string): StockSaleEditFormState {
+	if (name === "saleCnt") {
+		const nextState = { ...prevState, saleCnt: value };
+		const saleCnt = parseIntegerInputValue(value);
+		const unitPrice = parseDecimalInputValue(prevState.unitPrice);
+		const nextSaleAmt = calculateSaleAmountByUnitPrice(saleCnt, unitPrice);
+		if (nextSaleAmt !== null) {
+			return {
+				...nextState,
+				saleAmt: formatIntegerInputValue(String(nextSaleAmt), true),
+			};
+		}
+		return {
+			...nextState,
+			unitPrice: buildUnitPriceInputValue(parseIntegerInputValue(prevState.saleAmt), saleCnt),
+		};
+	}
+	if (name === "saleAmt") {
+		const nextSaleAmt = formatIntegerInputValue(value, true);
+		return {
+			...prevState,
+			saleAmt: nextSaleAmt,
+			unitPrice: buildUnitPriceInputValue(parseIntegerInputValue(nextSaleAmt), parseIntegerInputValue(prevState.saleCnt)),
+		};
+	}
+	if (name === "unitPrice") {
+		const nextUnitPrice = formatDecimalInputValue(value, false);
+		const nextSaleAmt = calculateSaleAmountByUnitPrice(parseIntegerInputValue(prevState.saleCnt), parseDecimalInputValue(nextUnitPrice));
+		return {
+			...prevState,
+			unitPrice: nextUnitPrice,
+			saleAmt: nextSaleAmt === null ? prevState.saleAmt : formatIntegerInputValue(String(nextSaleAmt), true),
+		};
+	}
+	if (name === "saleDt" || name === "stockAccountCd" || name === "stockNmCd" || name === "memo") {
+		return {
+			...prevState,
+			[name]: value,
+		};
+	}
+	return prevState;
 }
 
 // 금액을 천 단위 문자열로 변환합니다.
@@ -501,6 +642,8 @@ export default function StockSaleHistoryPage() {
 	const [isActionPending, setIsActionPending] = useState(false);
 	const [isCreateLayerOpen, setIsCreateLayerOpen] = useState(false);
 	const [isCreateSaving, setIsCreateSaving] = useState(false);
+	const [isEditLayerOpen, setIsEditLayerOpen] = useState(false);
+	const [isEditSaving, setIsEditSaving] = useState(false);
 	const [isOrderLayerOpen, setIsOrderLayerOpen] = useState(false);
 	const [isOrderSaving, setIsOrderSaving] = useState(false);
 	const [bootstrap, setBootstrap] = useState<StockSaleBootstrapResponse | null>(null);
@@ -523,6 +666,7 @@ export default function StockSaleHistoryPage() {
 		saleAmt: "",
 		memo: "",
 	});
+	const [editFormState, setEditFormState] = useState<StockSaleEditFormState | null>(null);
 
 	const accountOptionList = useMemo(
 		() => buildSortedOptionList(bootstrap?.accountList ?? [], favoriteAccountCodeSet),
@@ -538,11 +682,13 @@ export default function StockSaleHistoryPage() {
 			? "요청을 처리하고 있습니다."
 			: isCreateSaving
 				? "매매일지를 등록하고 있습니다."
-				: isOrderSaving
-					? "노출순서를 저장하고 있습니다."
-					: isListLoading
-						? "매매일지 목록을 불러오고 있습니다."
-						: "";
+				: isEditSaving
+					? "매매일지를 수정하고 있습니다."
+					: isOrderSaving
+						? "노출순서를 저장하고 있습니다."
+						: isListLoading
+							? "매매일지 목록을 불러오고 있습니다."
+							: "";
 	const visibleSummaryList = useMemo(
 		() => (showHoldingOnly ? listResponse.summaryList.filter((summaryItem) => summaryItem.saleCnt !== 0) : listResponse.summaryList),
 		[listResponse.summaryList, showHoldingOnly],
@@ -613,7 +759,7 @@ export default function StockSaleHistoryPage() {
 			field: "stockNm",
 			width: 300,
 			headerClass: styles.centerHeader,
-			cellClass: styles.centerCell,
+			cellClass: [styles.centerCell, styles.editableStockCell],
 			sortable: false,
 		},
 		{
@@ -913,7 +1059,7 @@ export default function StockSaleHistoryPage() {
 	// 매매일지 거래 이력을 저장하고 현재 검색 조건으로 목록을 다시 조회합니다.
 	const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		const requiredMessage = resolveStockSaleCreateValidationMessage(createFormState);
+		const requiredMessage = resolveStockSaleFormValidationMessage(createFormState);
 		if (requiredMessage !== "") {
 			showError(requiredMessage);
 			return;
@@ -937,6 +1083,66 @@ export default function StockSaleHistoryPage() {
 			await loadStockSaleList(1, startSaleDt, endSaleDt, selectedAccountCodeList, selectedStockCodeList);
 		} finally {
 			setIsCreateSaving(false);
+		}
+	};
+
+	// 결과 리스트 거래주식 셀에서 수정 레이어를 엽니다.
+	const handleDetailCellClick = useCallback((event: CellClickedEvent<StockSaleRow>) => {
+		if (event.colDef.field !== "stockNm" || !event.data) {
+			return;
+		}
+		setEditFormState(buildStockSaleEditFormState(event.data));
+		setIsEditLayerOpen(true);
+	}, []);
+
+	// 매매수정 레이어를 닫습니다.
+	const handleCloseEditLayer = () => {
+		if (isEditSaving) {
+			return;
+		}
+		setIsEditLayerOpen(false);
+		setEditFormState(null);
+	};
+
+	// 매매수정 입력값을 갱신합니다.
+	const handleEditFormChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+		const { name, value } = event.target;
+		setEditFormState((prevState) => (prevState ? buildNextStockSaleEditFormState(prevState, name, value) : prevState));
+	};
+
+	// 매매일지 거래 이력을 수정하고 현재 검색 조건으로 목록을 다시 조회합니다.
+	const handleEditSubmit = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		if (!editFormState) {
+			showError("수정할 매매일지를 확인해주세요.");
+			return;
+		}
+
+		const requiredMessage = resolveStockSaleFormValidationMessage(editFormState);
+		if (requiredMessage !== "") {
+			showError(requiredMessage);
+			return;
+		}
+
+		const command = buildStockSaleUpdateRequest(editFormState);
+		if (!command) {
+			showError("매매수정 입력값을 확인해주세요.");
+			return;
+		}
+
+		setIsEditSaving(true);
+		try {
+			const result = await updateStockSaleHistory(command);
+			if (!result.ok) {
+				showError(result.message || "매매일지 수정에 실패했습니다.");
+				return;
+			}
+			setIsEditLayerOpen(false);
+			setEditFormState(null);
+			showSuccess(result.data?.message || "매매일지를 수정했습니다.");
+			await loadStockSaleList(1, startSaleDt, endSaleDt, selectedAccountCodeList, selectedStockCodeList);
+		} finally {
+			setIsEditSaving(false);
 		}
 	};
 
@@ -1090,6 +1296,7 @@ export default function StockSaleHistoryPage() {
 									paginationPageSize={STOCK_SALE_GRID_PAGE_SIZE}
 									paginationPageSizeSelector={[20, 50, 100]}
 									suppressCellFocus
+									onCellClicked={handleDetailCellClick}
 									overlayNoRowsTemplate="검색 결과가 없습니다."
 								/>
 							</div>
@@ -1154,6 +1361,72 @@ export default function StockSaleHistoryPage() {
 							</button>
 							<button type="submit" className={styles.secondaryButton} disabled={isCreateSaving}>
 								등록
+							</button>
+						</div>
+					</form>
+				</div>
+			) : null}
+
+			{isEditLayerOpen && editFormState ? (
+				<div className={styles.modalBackdrop} role="dialog" aria-modal="true" aria-labelledby="stockSaleEditTitle">
+					<form className={styles.createModal} onSubmit={handleEditSubmit}>
+						<div className={styles.modalHeader}>
+							<div>
+								<p className={styles.eyebrow}>edit</p>
+								<h2 id="stockSaleEditTitle" className={styles.contentTitle}>매매수정</h2>
+							</div>
+							<button type="button" className={styles.modalCloseButton} onClick={handleCloseEditLayer} disabled={isEditSaving} aria-label="매매수정 닫기">
+								×
+							</button>
+						</div>
+
+						<div className={styles.createFormGrid}>
+							<label className={styles.fieldLabel}>
+								매매일시
+								<AdminDateInput name="saleDt" value={editFormState.saleDt} onChange={handleEditFormChange} disabled={isEditSaving} />
+							</label>
+							<label className={styles.fieldLabel}>
+								거래계좌
+								<select name="stockAccountCd" className={styles.formControl} value={editFormState.stockAccountCd} onChange={handleEditFormChange} disabled={isEditSaving}>
+									<option value="">선택</option>
+									{accountOptionList.map((optionItem) => (
+										<option key={optionItem.cd} value={optionItem.cd}>{optionItem.cdNm}</option>
+									))}
+								</select>
+							</label>
+							<label className={styles.fieldLabel}>
+								거래주식
+								<select name="stockNmCd" className={styles.formControl} value={editFormState.stockNmCd} onChange={handleEditFormChange} disabled={isEditSaving}>
+									<option value="">선택</option>
+									{stockOptionList.map((optionItem) => (
+										<option key={optionItem.cd} value={optionItem.cd}>{optionItem.cdNm}</option>
+									))}
+								</select>
+							</label>
+							<label className={styles.fieldLabel}>
+								거래수
+								<input name="saleCnt" className={styles.formControl} type="number" step="1" value={editFormState.saleCnt} onChange={handleEditFormChange} disabled={isEditSaving} />
+							</label>
+							<label className={styles.fieldLabel}>
+								거래금액
+								<input name="saleAmt" className={styles.formControl} type="text" inputMode="numeric" value={editFormState.saleAmt} onChange={handleEditFormChange} disabled={isEditSaving} />
+							</label>
+							<label className={styles.fieldLabel}>
+								거래단가
+								<input name="unitPrice" className={styles.formControl} type="text" inputMode="decimal" value={editFormState.unitPrice} onChange={handleEditFormChange} disabled={isEditSaving} />
+							</label>
+							<label className={`${styles.fieldLabel} ${styles.memoField}`}>
+								메모
+								<textarea name="memo" className={`${styles.formControl} ${styles.memoControl}`} value={editFormState.memo} onChange={handleEditFormChange} disabled={isEditSaving} maxLength={300} />
+							</label>
+						</div>
+
+						<div className={styles.modalActions}>
+							<button type="button" className={styles.ghostButton} onClick={handleCloseEditLayer} disabled={isEditSaving}>
+								취소
+							</button>
+							<button type="submit" className={styles.secondaryButton} disabled={isEditSaving}>
+								저장
 							</button>
 						</div>
 					</form>

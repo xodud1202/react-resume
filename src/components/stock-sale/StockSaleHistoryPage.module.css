@@ -747,6 +747,14 @@
 	box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.12);
 }
 
+.editableStockCell {
+	color: var(--stock-sale-accent);
+	cursor: pointer;
+	font-weight: 800;
+	text-decoration: underline;
+	text-underline-offset: 3px;
+}
+
 .memoField,
 .modalActions {
 	grid-column: 1 / -1;
