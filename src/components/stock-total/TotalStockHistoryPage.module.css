@@ -1,0 +1,276 @@
+.contentPanel {
+	min-height: calc(100vh - 2rem);
+}
+
+.tabBar {
+	display: inline-flex;
+	align-items: center;
+	align-self: start;
+	min-width: 0;
+	border-bottom: 1px solid var(--stock-sale-border);
+}
+
+.tabButton {
+	min-height: 2.45rem;
+	border: 0;
+	border-bottom: 2px solid transparent;
+	background: transparent;
+	color: var(--stock-sale-muted);
+	cursor: pointer;
+	font: inherit;
+	font-size: 0.88rem;
+	font-weight: 900;
+	padding: 0 0.9rem;
+	transition:
+		border-color 0.14s ease,
+		color 0.14s ease,
+		background 0.14s ease;
+}
+
+.tabButton:hover {
+	background: rgba(45, 212, 191, 0.08);
+	color: var(--stock-sale-ink);
+}
+
+.tabButtonActive {
+	border-bottom-color: var(--stock-sale-accent);
+	color: var(--stock-sale-ink);
+}
+
+.monthlyScrollShell,
+.historyTableShell {
+	min-width: 0;
+	border: 1px solid var(--stock-sale-border);
+	border-radius: 8px;
+	background: rgba(2, 6, 23, 0.22);
+}
+
+.monthlyScrollShell {
+	overflow-x: auto;
+	overflow-y: visible;
+}
+
+.monthlyTable,
+.historyTable {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	color: var(--stock-sale-ink);
+	font-size: 0.84rem;
+}
+
+.monthlyTable {
+	min-width: calc(18rem + (var(--month-count, 1) * 10rem));
+	table-layout: fixed;
+}
+
+.historyTable {
+	min-width: 48rem;
+	table-layout: fixed;
+}
+
+.monthlyTable th,
+.monthlyTable td,
+.historyTable th,
+.historyTable td {
+	height: 2.35rem;
+	border-right: 1px solid var(--stock-sale-border);
+	border-bottom: 1px solid var(--stock-sale-border);
+	padding: 0 0.65rem;
+	vertical-align: middle;
+}
+
+.monthlyTable thead th,
+.historyTable thead th {
+	position: sticky;
+	top: 0;
+	z-index: 6;
+	background: rgba(2, 6, 23, 0.98);
+	color: var(--stock-sale-muted);
+	font-weight: 900;
+	text-align: center;
+}
+
+.historyTableShell {
+	overflow-x: auto;
+}
+
+.historyTable tbody th {
+	color: var(--stock-sale-ink);
+	font-weight: 900;
+	text-align: center;
+}
+
+.historyTable td {
+	text-align: right;
+}
+
+.groupHeaderCell,
+.groupCell {
+	width: 9rem;
+	min-width: 9rem;
+	max-width: 9rem;
+}
+
+.labelHeaderCell,
+.labelCell {
+	width: 9rem;
+	min-width: 9rem;
+	max-width: 9rem;
+}
+
+.monthHeaderCell,
+.valueCell {
+	width: 10rem;
+	min-width: 10rem;
+}
+
+.stickyGroupCell,
+.stickyLabelCell {
+	position: sticky;
+	z-index: 5;
+}
+
+.stickyGroupCell {
+	left: 0;
+}
+
+.stickyLabelCell {
+	left: 9rem;
+}
+
+thead .stickyGroupCell,
+thead .stickyLabelCell {
+	z-index: 8;
+}
+
+.groupCell,
+.labelCell {
+	background: rgba(7, 16, 15, 0.98);
+	color: var(--stock-sale-ink);
+	font-weight: 900;
+	text-align: center;
+}
+
+.labelCell {
+	color: var(--stock-sale-muted);
+}
+
+.summaryRow .groupCell,
+.summaryRow .labelCell,
+.summaryRow .valueCell {
+	background: rgba(45, 212, 191, 0.12);
+}
+
+.summaryGroupCell {
+	color: var(--stock-sale-accent);
+}
+
+.emphasisRow .labelCell,
+.emphasisRow .valueCell {
+	background: rgba(148, 163, 184, 0.12);
+	font-weight: 900;
+}
+
+.valueCell {
+	background: rgba(15, 23, 42, 0.26);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.monthlyTable tr:hover .labelCell,
+.monthlyTable tr:hover .valueCell {
+	background: rgba(45, 212, 191, 0.09);
+}
+
+.emptyTableCell {
+	height: 8rem;
+	color: var(--stock-sale-muted);
+	text-align: center;
+}
+
+.moreButtonRow {
+	display: flex;
+	justify-content: center;
+	padding: 0.85rem;
+}
+
+.checkAmountFormGrid {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.checkAmountDateField,
+.checkAmountEntryShell {
+	grid-column: 1 / -1;
+}
+
+.checkAmountEntryShell {
+	display: grid;
+	min-height: 0;
+	max-height: min(26rem, calc(100vh - 17rem));
+	overflow: auto;
+	border: 1px solid var(--stock-sale-border);
+	border-radius: 8px;
+	background: rgba(2, 6, 23, 0.22);
+}
+
+.checkAmountEntryHeader,
+.checkAmountEntryRow {
+	display: grid;
+	grid-template-columns: minmax(8rem, 1fr) minmax(11rem, 1.25fr);
+	align-items: center;
+	gap: 0.75rem;
+	min-width: 0;
+	padding: 0.65rem 0.75rem;
+}
+
+.checkAmountEntryHeader {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	background: rgba(2, 6, 23, 0.98);
+	color: var(--stock-sale-muted);
+	font-size: 0.78rem;
+	font-weight: 900;
+}
+
+.checkAmountEntryRow {
+	border-top: 1px solid var(--stock-sale-border);
+}
+
+.checkAmountAccountName {
+	min-width: 0;
+	overflow-wrap: anywhere;
+	color: var(--stock-sale-ink);
+	font-size: 0.86rem;
+	font-weight: 900;
+}
+
+.checkAmountEmptyText {
+	margin: 0;
+	padding: 1.5rem;
+	color: var(--stock-sale-muted);
+	text-align: center;
+}
+
+@media (max-width: 1024px) {
+	.contentPanel {
+		min-height: auto;
+	}
+
+	.tabBar {
+		width: 100%;
+	}
+
+	.tabButton {
+		flex: 1 1 0;
+		padding: 0 0.55rem;
+		white-space: normal;
+	}
+
+	.checkAmountEntryHeader,
+	.checkAmountEntryRow {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 0.45rem;
+	}
+}

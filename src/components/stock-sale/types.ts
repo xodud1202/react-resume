@@ -14,6 +14,8 @@ export interface StockSaleBootstrapResponse {
 	accountList: StockSaleOption[];
 	// 거래 주식 목록입니다.
 	stockList: StockSaleOption[];
+	// 입출금구분 목록입니다.
+	cashInOutList: StockSaleOption[];
 }
 
 // 매매일지 목록 검색 조건을 정의합니다.

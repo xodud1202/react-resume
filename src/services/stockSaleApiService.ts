@@ -120,6 +120,7 @@ function normalizeStockSaleBootstrapResponse(data: Partial<StockSaleBootstrapRes
 		currentUser: data?.currentUser ?? null,
 		accountList: resolveArrayValue(data?.accountList).map((optionItem) => normalizeStockSaleOption(optionItem)),
 		stockList: resolveArrayValue(data?.stockList).map((optionItem) => normalizeStockSaleOption(optionItem)),
+		cashInOutList: resolveArrayValue(data?.cashInOutList).map((optionItem) => normalizeStockSaleOption(optionItem)),
 	};
 }
 

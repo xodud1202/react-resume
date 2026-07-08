@@ -34,9 +34,9 @@ const LANDING_MENU_BUTTON_LIST: LandingMenuButton[] = [
 		description: "휴가관리 화면으로 이동합니다.",
 	},
 	{
-		label: "매매일지",
-		href: "/work/stock",
-		description: "매매일지 화면으로 이동합니다.",
+		label: "주식정보",
+		href: "/work/totalstock",
+		description: "주식정보 화면으로 이동합니다.",
 	},
 	{
 		label: "부자계산기",

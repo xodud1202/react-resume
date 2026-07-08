@@ -15,6 +15,7 @@ import styles from "./StockSaleHistoryPage.module.css";
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 const STOCK_SALE_PAGE_PATH = "/work/stock";
+const TOTAL_STOCK_PAGE_PATH = "/work/totalstock";
 const STOCK_SALE_GRID_PAGE_SIZE = 20;
 const STOCK_SALE_FETCH_PAGE_SIZE = 10000;
 const ACCOUNT_FAVORITE_STORAGE_KEY = "react-resume:stock-sale:favorite-account-codes";
@@ -78,6 +79,8 @@ interface StockSaleCreateFormState {
 	saleCnt: string;
 	// 매매금액 입력값입니다.
 	saleAmt: string;
+	// 거래단가 입력값입니다.
+	unitPrice: string;
 	// 메모 입력값입니다.
 	memo: string;
 }
@@ -85,8 +88,6 @@ interface StockSaleCreateFormState {
 interface StockSaleEditFormState extends StockSaleCreateFormState {
 	// 매매 이력 번호입니다.
 	saleHistSeq: number;
-	// 거래단가 입력값입니다.
-	unitPrice: string;
 	// 기존 손익금액입니다.
 	profitAmt: number;
 }
@@ -411,8 +412,8 @@ function buildStockSaleUpdateRequest(formState: StockSaleEditFormState): StockSa
 	};
 }
 
-// 수정 폼 입력값 변경 시 거래금액과 거래단가 표시를 서로 맞춥니다.
-function buildNextStockSaleEditFormState(prevState: StockSaleEditFormState, name: string, value: string): StockSaleEditFormState {
+// 매매 폼 입력값 변경 시 거래금액과 거래단가 표시를 서로 맞춥니다.
+function buildNextStockSaleFormState<T extends StockSaleCreateFormState>(prevState: T, name: string, value: string): T {
 	if (name === "saleCnt") {
 		const nextState = { ...prevState, saleCnt: value };
 		const saleCnt = parseIntegerInputValue(value);
@@ -664,6 +665,7 @@ export default function StockSaleHistoryPage() {
 		stockNmCd: "",
 		saleCnt: "",
 		saleAmt: "",
+		unitPrice: "",
 		memo: "",
 	});
 	const [editFormState, setEditFormState] = useState<StockSaleEditFormState | null>(null);
@@ -1033,6 +1035,7 @@ export default function StockSaleHistoryPage() {
 			stockNmCd: selectedStockCodeList[0] ?? stockOptionList[0]?.cd ?? "",
 			saleCnt: "",
 			saleAmt: "",
+			unitPrice: "",
 			memo: "",
 		});
 		setIsCreateLayerOpen(true);
@@ -1049,11 +1052,7 @@ export default function StockSaleHistoryPage() {
 	// 매매등록 입력값을 갱신합니다.
 	const handleCreateFormChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
 		const { name, value } = event.target;
-		const nextValue = name === "saleAmt" ? formatIntegerInputValue(value, true) : value;
-		setCreateFormState((prevState) => ({
-			...prevState,
-			[name]: nextValue,
-		}));
+		setCreateFormState((prevState) => buildNextStockSaleFormState(prevState, name, value));
 	};
 
 	// 매매일지 거래 이력을 저장하고 현재 검색 조건으로 목록을 다시 조회합니다.
@@ -1107,7 +1106,7 @@ export default function StockSaleHistoryPage() {
 	// 매매수정 입력값을 갱신합니다.
 	const handleEditFormChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
 		const { name, value } = event.target;
-		setEditFormState((prevState) => (prevState ? buildNextStockSaleEditFormState(prevState, name, value) : prevState));
+		setEditFormState((prevState) => (prevState ? buildNextStockSaleFormState(prevState, name, value) : prevState));
 	};
 
 	// 매매일지 거래 이력을 수정하고 현재 검색 조건으로 목록을 다시 조회합니다.
@@ -1144,6 +1143,11 @@ export default function StockSaleHistoryPage() {
 		} finally {
 			setIsEditSaving(false);
 		}
+	};
+
+	// 주식계좌이력 화면으로 이동합니다.
+	const handleMoveTotalStockPage = () => {
+		void router.push(TOTAL_STOCK_PAGE_PATH);
 	};
 
 	// 업무 세션을 종료하고 로그인 화면으로 이동합니다.
@@ -1253,11 +1257,16 @@ export default function StockSaleHistoryPage() {
 									<h2 className={styles.contentTitle}>종목별 합계</h2>
 								</div>
 								<div className={styles.summaryHeaderActions}>
-									<p className={styles.metricValue}>{formatNumber(totalInvestmentAmount)}</p>
-									<label className={styles.holdingOnlyControl}>
-										<input type="checkbox" checked={showHoldingOnly} onChange={handleShowHoldingOnlyChange} />
-										<span>보유주식만보기</span>
-									</label>
+									<div className={styles.summaryMetricActions}>
+										<label className={styles.holdingOnlyControl}>
+											<input type="checkbox" checked={showHoldingOnly} onChange={handleShowHoldingOnlyChange} />
+											<span>보유주식만보기</span>
+										</label>
+										<p className={styles.metricValue}>{formatNumber(totalInvestmentAmount)}</p>
+										<button type="button" className={styles.secondaryButton} onClick={handleMoveTotalStockPage}>
+											주식계좌이력
+										</button>
+									</div>
 								</div>
 							</div>
 							<div className={`ag-theme-quartz-dark ${styles.darkAgGrid} ${styles.summaryAgGridShell}`}>
@@ -1348,6 +1357,10 @@ export default function StockSaleHistoryPage() {
 							<label className={styles.fieldLabel}>
 								매매금액
 								<input name="saleAmt" className={styles.formControl} type="text" inputMode="numeric" value={createFormState.saleAmt} onChange={handleCreateFormChange} disabled={isCreateSaving} />
+							</label>
+							<label className={styles.fieldLabel}>
+								거래단가
+								<input name="unitPrice" className={styles.formControl} type="text" inputMode="decimal" value={createFormState.unitPrice} onChange={handleCreateFormChange} disabled={isCreateSaving} />
 							</label>
 							<label className={`${styles.fieldLabel} ${styles.memoField}`}>
 								메모
