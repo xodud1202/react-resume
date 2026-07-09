@@ -103,6 +103,8 @@ function normalizeDailyHistoryRow(row: Partial<TotalStockDailyHistoryRow> | null
 		checkAmt: resolveNumberValue(row?.checkAmt),
 		profitAmt: resolveNumberValue(row?.profitAmt),
 		profitRate: resolveNumberValue(row?.profitRate),
+		previousCompareProfitAmt: resolveNumberValue(row?.previousCompareProfitAmt),
+		previousCompareProfitRate: resolveNumberValue(row?.previousCompareProfitRate),
 		checkAccountAmountMap: normalizeNumberMap(row?.checkAccountAmountMap),
 	};
 }

@@ -409,11 +409,8 @@ function formatRate(value: number | null | undefined): string {
 	}).format(normalizedValue)}%`;
 }
 
-// 월별 행 값의 증가/감소 스타일을 반환합니다.
-function resolveValueToneClassName(row: TotalStockHistoryValueRow, value: number): string {
-	if (!row.rowKey.toLowerCase().includes("profit")) {
-		return "";
-	}
+// 부호가 있는 값의 증가/감소 스타일을 반환합니다.
+function resolveSignedValueToneClassName(value: number): string {
 	if (value > 0) {
 		return stockStyles.positiveAmount;
 	}
@@ -421,6 +418,14 @@ function resolveValueToneClassName(row: TotalStockHistoryValueRow, value: number
 		return stockStyles.negativeAmount;
 	}
 	return "";
+}
+
+// 월별 행 값의 증가/감소 스타일을 반환합니다.
+function resolveValueToneClassName(row: TotalStockHistoryValueRow, value: number): string {
+	if (!row.rowKey.toLowerCase().includes("profit")) {
+		return "";
+	}
+	return resolveSignedValueToneClassName(value);
 }
 
 // 강조 대상 월별 행의 클래스명을 반환합니다.
@@ -1103,6 +1108,8 @@ export default function TotalStockHistoryPage() {
 											<col className={styles.accountHistoryCheckColumn} />
 											<col className={styles.accountHistoryProfitColumn} />
 											<col className={styles.accountHistoryRateColumn} />
+											<col className={styles.accountHistoryProfitColumn} />
+											<col className={styles.accountHistoryRateColumn} />
 										</colgroup>
 										<thead>
 											<tr>
@@ -1111,6 +1118,8 @@ export default function TotalStockHistoryPage() {
 												<th>월중확인평가금</th>
 												<th>원금대비 손익금</th>
 												<th>원금대비 손익율</th>
+												<th>이전대비 손익금</th>
+												<th>이전대비 손익율</th>
 											</tr>
 										</thead>
 										<tbody>
@@ -1129,17 +1138,23 @@ export default function TotalStockHistoryPage() {
 															{formatNumber(historyRow.checkAmt)}
 														</button>
 													</td>
-													<td className={historyRow.profitAmt > 0 ? stockStyles.positiveAmount : historyRow.profitAmt < 0 ? stockStyles.negativeAmount : ""}>
+													<td className={resolveSignedValueToneClassName(historyRow.profitAmt)}>
 														{formatNumber(historyRow.profitAmt)}
 													</td>
-													<td className={historyRow.profitRate > 0 ? stockStyles.positiveAmount : historyRow.profitRate < 0 ? stockStyles.negativeAmount : ""}>
+													<td className={resolveSignedValueToneClassName(historyRow.profitRate)}>
 														{formatRate(historyRow.profitRate)}
+													</td>
+													<td className={resolveSignedValueToneClassName(historyRow.previousCompareProfitAmt)}>
+														{formatNumber(historyRow.previousCompareProfitAmt)}
+													</td>
+													<td className={resolveSignedValueToneClassName(historyRow.previousCompareProfitRate)}>
+														{formatRate(historyRow.previousCompareProfitRate)}
 													</td>
 												</tr>
 											))}
 											{historyResponse.historyRowList.length === 0 ? (
 												<tr>
-													<td className={styles.emptyTableCell} colSpan={5}>
+													<td className={styles.emptyTableCell} colSpan={7}>
 														조회 결과가 없습니다.
 													</td>
 												</tr>

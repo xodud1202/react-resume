@@ -40,6 +40,10 @@ export interface TotalStockDailyHistoryRow {
 	profitAmt: number;
 	// 원금대비 손익율입니다.
 	profitRate: number;
+	// 이전대비 손익금입니다.
+	previousCompareProfitAmt: number;
+	// 이전대비 손익율입니다.
+	previousCompareProfitRate: number;
 	// 확인일의 계좌별 확인 평가금 Map입니다.
 	checkAccountAmountMap: Record<string, number>;
 }
