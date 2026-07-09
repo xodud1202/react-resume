@@ -5,8 +5,16 @@ import FeedbackLayer from "@/components/common/FeedbackLayer";
 import useFeedbackLayer from "@/components/common/useFeedbackLayer";
 import useResizableSplitLayout from "@/components/common/useResizableSplitLayout";
 import AdminDateInput from "@/components/work/AdminDateInput";
-import type { VacationBootstrapResponse, VacationCreateRequest, VacationListResponse } from "@/components/vacation/types";
-import { createVacation, fetchVacationBootstrap, fetchVacationList } from "@/services/vacationApiService";
+import type {
+	VacationBootstrapResponse,
+	VacationCompanyOption,
+	VacationCreateRequest,
+	VacationListResponse,
+	VacationListRow,
+	VacationPersonOption,
+	VacationUpdateRequest,
+} from "@/components/vacation/types";
+import { createVacation, deleteVacation, fetchVacationBootstrap, fetchVacationList, updateVacation } from "@/services/vacationApiService";
 import { logoutWork, refreshWorkSession } from "@/services/workApiService";
 import styles from "./VacationWorkspacePage.module.css";
 
@@ -29,6 +37,11 @@ interface VacationCreateFormState {
 	vacationMemo: string;
 }
 
+interface VacationEditFormState extends VacationCreateFormState {
+	// 수정할 휴가 번호 문자열입니다.
+	vacationSeq: string;
+}
+
 interface VacationModalShellProps {
 	// 레이어팝업 제목입니다.
 	title: string;
@@ -36,6 +49,21 @@ interface VacationModalShellProps {
 	onClose: () => void;
 	// 팝업 본문입니다.
 	children: ReactNode;
+}
+
+interface VacationSaveFormFieldsProps {
+	// 휴가 저장 폼 상태입니다.
+	form: VacationCreateFormState;
+	// 휴가자 선택 목록입니다.
+	personList: VacationPersonOption[];
+	// 회사 선택 목록입니다.
+	companyList: VacationCompanyOption[];
+	// 휴가 구분 선택 목록입니다.
+	vacationCodeList: VacationBootstrapResponse["vacationCodeList"];
+	// 저장 진행 여부입니다.
+	isSaving: boolean;
+	// 입력값 변경 처리입니다.
+	onChange: (fieldName: keyof VacationCreateFormState, value: string) => void;
 }
 
 // returnUrl을 업무관리 하위 경로로만 제한합니다.
@@ -65,6 +93,19 @@ function createEmptyVacationCreateForm(): VacationCreateFormState {
 	};
 }
 
+// 목록 행을 휴가 수정 폼 상태로 변환합니다.
+function createVacationEditForm(vacationItem: VacationListRow): VacationEditFormState {
+	return {
+		vacationSeq: String(vacationItem.vacationSeq),
+		personSeq: String(vacationItem.personSeq),
+		workCompanySeq: String(vacationItem.workCompanySeq),
+		vacationCd: vacationItem.vacationCd,
+		startDt: vacationItem.startDt,
+		endDt: vacationItem.endDt,
+		vacationMemo: vacationItem.vacationMemo,
+	};
+}
+
 // 빈 휴가 목록 응답 상태를 생성합니다.
 function createEmptyVacationListResponse(): VacationListResponse {
 	return {
@@ -75,6 +116,15 @@ function createEmptyVacationListResponse(): VacationListResponse {
 		summaryList: [],
 		vacationList: [],
 	};
+}
+
+// 휴가 번호 문자열 값을 양수로 변환합니다.
+function parseRequiredSequenceNumber(value: string, message: string): number {
+	const parsedValue = Number(value);
+	if (!Number.isInteger(parsedValue) || parsedValue < 1) {
+		throw new Error(message);
+	}
+	return parsedValue;
 }
 
 // select 문자열 값을 양수로 변환합니다.
@@ -147,6 +197,14 @@ function buildVacationCreateRequest(form: VacationCreateFormState): VacationCrea
 	};
 }
 
+// 휴가 수정 요청 객체를 생성합니다.
+function buildVacationUpdateRequest(form: VacationEditFormState): VacationUpdateRequest {
+	return {
+		...buildVacationCreateRequest(form),
+		vacationSeq: parseRequiredSequenceNumber(form.vacationSeq, "수정할 휴가 사용 내역을 확인해주세요."),
+	};
+}
+
 // 휴가관리 레이어팝업 공통 shell을 렌더링합니다.
 function VacationModalShell({ title, onClose, children }: VacationModalShellProps) {
 	return (
@@ -161,6 +219,94 @@ function VacationModalShell({ title, onClose, children }: VacationModalShellProp
 				<div className={styles.modalBody}>{children}</div>
 			</div>
 		</div>
+	);
+}
+
+// 휴가 등록과 수정에서 사용하는 공통 입력 필드를 렌더링합니다.
+function VacationSaveFormFields({ form, personList, companyList, vacationCodeList, isSaving, onChange }: VacationSaveFormFieldsProps) {
+	return (
+		<>
+			<label className={styles.modalFieldLabel}>
+				이름
+				<select
+					className={styles.modalFieldControl}
+					value={form.personSeq}
+					onChange={(event) => onChange("personSeq", event.target.value)}
+					disabled={isSaving}
+				>
+					<option value="">이름 선택</option>
+					{personList.map((personItem) => (
+						<option key={personItem.personSeq} value={personItem.personSeq}>
+							{personItem.personNm}
+						</option>
+					))}
+				</select>
+			</label>
+
+			<label className={styles.modalFieldLabel}>
+				회사
+				<select
+					className={styles.modalFieldControl}
+					value={form.workCompanySeq}
+					onChange={(event) => onChange("workCompanySeq", event.target.value)}
+					disabled={isSaving}
+				>
+					<option value="">회사 선택</option>
+					{companyList.map((companyItem) => (
+						<option key={companyItem.workCompanySeq} value={companyItem.workCompanySeq}>
+							{companyItem.workCompanyNm}
+						</option>
+					))}
+				</select>
+			</label>
+
+			<label className={styles.modalFieldLabel}>
+				휴가구분
+				<select
+					className={styles.modalFieldControl}
+					value={form.vacationCd}
+					onChange={(event) => onChange("vacationCd", event.target.value)}
+					disabled={isSaving}
+				>
+					<option value="">휴가구분 선택</option>
+					{vacationCodeList.map((codeItem) => (
+						<option key={codeItem.cd} value={codeItem.cd}>
+							{codeItem.cdNm}
+						</option>
+					))}
+				</select>
+			</label>
+
+			<div className={styles.modalDateRow}>
+				<label className={styles.modalFieldLabel}>
+					시작일
+					<AdminDateInput
+						value={form.startDt}
+						onChange={(event) => onChange("startDt", event.target.value)}
+						disabled={isSaving}
+					/>
+				</label>
+				<label className={styles.modalFieldLabel}>
+					종료일
+					<AdminDateInput
+						value={form.endDt}
+						onChange={(event) => onChange("endDt", event.target.value)}
+						disabled={isSaving}
+					/>
+				</label>
+			</div>
+
+			<label className={styles.modalFieldLabel}>
+				사유
+				<input
+					type="text"
+					className={styles.modalFieldControl}
+					value={form.vacationMemo}
+					onChange={(event) => onChange("vacationMemo", event.target.value)}
+					disabled={isSaving}
+				/>
+			</label>
+		</>
 	);
 }
 
@@ -182,12 +328,16 @@ export default function VacationWorkspacePage() {
 	const [isActionPending, setIsActionPending] = useState(false);
 	const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 	const [isCreateSaving, setIsCreateSaving] = useState(false);
+	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+	const [isEditSaving, setIsEditSaving] = useState(false);
+	const [deletingVacationSeq, setDeletingVacationSeq] = useState<number | null>(null);
 	const [bootstrap, setBootstrap] = useState<VacationBootstrapResponse | null>(null);
 	const [listResponse, setListResponse] = useState<VacationListResponse>(createEmptyVacationListResponse);
 	const [selectedPersonSeq, setSelectedPersonSeq] = useState<number | null>(null);
 	const [selectedCompanySeq, setSelectedCompanySeq] = useState<number | null>(null);
 	const [selectedVacationYear, setSelectedVacationYear] = useState<number | null>(null);
 	const [createForm, setCreateForm] = useState<VacationCreateFormState>(createEmptyVacationCreateForm);
+	const [editForm, setEditForm] = useState<VacationEditFormState | null>(null);
 
 	const companyList = useMemo(() => bootstrap?.companyList ?? [], [bootstrap]);
 	const personList = useMemo(() => bootstrap?.personList ?? [], [bootstrap]);
@@ -214,9 +364,13 @@ export default function VacationWorkspacePage() {
 			? "요청을 처리하고 있습니다."
 			: isCreateSaving
 				? "휴가를 등록하고 있습니다."
-				: isListLoading
-					? "휴가 목록을 불러오고 있습니다."
-					: "";
+				: isEditSaving
+					? "휴가를 수정하고 있습니다."
+					: deletingVacationSeq !== null
+						? "휴가를 삭제하고 있습니다."
+						: isListLoading
+							? "휴가 목록을 불러오고 있습니다."
+							: "";
 
 	// 선택 조건 기준으로 휴가년도, 휴가 요약, 휴가 목록을 조회합니다.
 	const loadVacationList = async (personSeq: number | null, workCompanySeq: number | null, vacationYear: number | null, useDefaultCompany: boolean) => {
@@ -332,6 +486,11 @@ export default function VacationWorkspacePage() {
 		setIsCreateModalOpen(true);
 	};
 
+	// 휴가 등록 폼 입력값을 갱신합니다.
+	const handleChangeCreateForm = (fieldName: keyof VacationCreateFormState, value: string) => {
+		setCreateForm((prevState) => ({ ...prevState, [fieldName]: value }));
+	};
+
 	// 휴가 등록 요청을 제출합니다.
 	const handleSubmitCreate = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
@@ -357,6 +516,80 @@ export default function VacationWorkspacePage() {
 			await loadVacationList(selectedPersonSeq, selectedCompanySeq, resolveVacationYearFromDate(request.startDt), false);
 		} finally {
 			setIsCreateSaving(false);
+		}
+	};
+
+	// 휴가 수정 팝업을 목록 행 값으로 엽니다.
+	const handleOpenEditModal = (vacationItem: VacationListRow) => {
+		setEditForm(createVacationEditForm(vacationItem));
+		setIsEditModalOpen(true);
+	};
+
+	// 휴가 수정 팝업을 닫습니다.
+	const handleCloseEditModal = () => {
+		if (isEditSaving) {
+			return;
+		}
+		setIsEditModalOpen(false);
+		setEditForm(null);
+	};
+
+	// 휴가 수정 폼 입력값을 갱신합니다.
+	const handleChangeEditForm = (fieldName: keyof VacationCreateFormState, value: string) => {
+		setEditForm((prevState) => (prevState ? { ...prevState, [fieldName]: value } : prevState));
+	};
+
+	// 휴가 수정 요청을 제출합니다.
+	const handleSubmitEdit = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		if (!editForm) {
+			showError("수정할 휴가 사용 내역을 확인해주세요.");
+			return;
+		}
+
+		let request: VacationUpdateRequest;
+		try {
+			request = buildVacationUpdateRequest(editForm);
+		} catch (error) {
+			showError(error instanceof Error ? error.message : "휴가 수정 요청 정보를 확인해주세요.");
+			return;
+		}
+
+		setIsEditSaving(true);
+		try {
+			const result = await updateVacation(request);
+			if (!result.ok || !result.data) {
+				showError(result.message || "휴가 수정에 실패했습니다.");
+				return;
+			}
+
+			setIsEditModalOpen(false);
+			setEditForm(null);
+			showSuccess(result.data.message || "휴가가 수정되었습니다.");
+			await loadVacationList(selectedPersonSeq, selectedCompanySeq, resolveVacationYearFromDate(request.startDt), false);
+		} finally {
+			setIsEditSaving(false);
+		}
+	};
+
+	// 휴가 사용 내역을 삭제하고 현재 목록을 다시 조회합니다.
+	const handleClickDeleteVacation = async (vacationItem: VacationListRow) => {
+		if (!window.confirm(`${vacationItem.personNm}님의 ${vacationItem.startDt} 휴가 사용 내역을 삭제하시겠습니까?`)) {
+			return;
+		}
+
+		setDeletingVacationSeq(vacationItem.vacationSeq);
+		try {
+			const result = await deleteVacation({ vacationSeq: vacationItem.vacationSeq });
+			if (!result.ok || !result.data) {
+				showError(result.message || "휴가 삭제에 실패했습니다.");
+				return;
+			}
+
+			showSuccess(result.data.message || "휴가가 삭제되었습니다.");
+			await loadVacationList(selectedPersonSeq, selectedCompanySeq, selectedVacationYear, false);
+		} finally {
+			setDeletingVacationSeq(null);
 		}
 	};
 
@@ -589,12 +822,13 @@ export default function VacationWorkspacePage() {
 												<th>종료일</th>
 												<th>사용일</th>
 												<th>휴가사유</th>
+												<th>관리</th>
 											</tr>
 										</thead>
 										<tbody>
 											{listResponse.vacationList.length < 1 ? (
 												<tr>
-													<td colSpan={7} className={styles.emptyTableCell}>등록된 휴가 사용 내역이 없습니다.</td>
+													<td colSpan={8} className={styles.emptyTableCell}>등록된 휴가 사용 내역이 없습니다.</td>
 												</tr>
 											) : null}
 											{listResponse.vacationList.map((vacationItem) => (
@@ -606,6 +840,24 @@ export default function VacationWorkspacePage() {
 													<td>{vacationItem.endDt}</td>
 													<td>{formatVacationNumber(vacationItem.useDayCnt)}</td>
 													<td className={styles.memoCell}>{vacationItem.vacationMemo || "-"}</td>
+													<td className={styles.actionCell}>
+														<button
+															type="button"
+															className={styles.tableActionButton}
+															onClick={() => handleOpenEditModal(vacationItem)}
+															disabled={isListLoading || isCreateSaving || isEditSaving || deletingVacationSeq !== null}
+														>
+															수정
+														</button>
+														<button
+															type="button"
+															className={`${styles.tableActionButton} ${styles.dangerActionButton}`}
+															onClick={() => void handleClickDeleteVacation(vacationItem)}
+															disabled={isListLoading || isCreateSaving || isEditSaving || deletingVacationSeq !== null}
+														>
+															{deletingVacationSeq === vacationItem.vacationSeq ? "삭제 중" : "삭제"}
+														</button>
+													</td>
 												</tr>
 											))}
 										</tbody>
@@ -619,92 +871,44 @@ export default function VacationWorkspacePage() {
 				{isCreateModalOpen ? (
 					<VacationModalShell title="휴가등록" onClose={() => !isCreateSaving && setIsCreateModalOpen(false)}>
 						<form className={styles.modalForm} onSubmit={(event) => void handleSubmitCreate(event)}>
-							<label className={styles.modalFieldLabel}>
-								이름
-								<select
-									className={styles.modalFieldControl}
-									value={createForm.personSeq}
-									onChange={(event) => setCreateForm((prevState) => ({ ...prevState, personSeq: event.target.value }))}
-									disabled={isCreateSaving}
-								>
-									<option value="">이름 선택</option>
-									{personList.map((personItem) => (
-										<option key={personItem.personSeq} value={personItem.personSeq}>
-											{personItem.personNm}
-										</option>
-									))}
-								</select>
-							</label>
-
-							<label className={styles.modalFieldLabel}>
-								회사
-								<select
-									className={styles.modalFieldControl}
-									value={createForm.workCompanySeq}
-									onChange={(event) => setCreateForm((prevState) => ({ ...prevState, workCompanySeq: event.target.value }))}
-									disabled={isCreateSaving}
-								>
-									<option value="">회사 선택</option>
-									{companyList.map((companyItem) => (
-										<option key={companyItem.workCompanySeq} value={companyItem.workCompanySeq}>
-											{companyItem.workCompanyNm}
-										</option>
-									))}
-								</select>
-							</label>
-
-							<label className={styles.modalFieldLabel}>
-								휴가구분
-								<select
-									className={styles.modalFieldControl}
-									value={createForm.vacationCd}
-									onChange={(event) => setCreateForm((prevState) => ({ ...prevState, vacationCd: event.target.value }))}
-									disabled={isCreateSaving}
-								>
-									<option value="">휴가구분 선택</option>
-									{vacationCodeList.map((codeItem) => (
-										<option key={codeItem.cd} value={codeItem.cd}>
-											{codeItem.cdNm}
-										</option>
-									))}
-								</select>
-							</label>
-
-							<div className={styles.modalDateRow}>
-								<label className={styles.modalFieldLabel}>
-									시작일
-									<AdminDateInput
-										value={createForm.startDt}
-										onChange={(event) => setCreateForm((prevState) => ({ ...prevState, startDt: event.target.value }))}
-										disabled={isCreateSaving}
-									/>
-								</label>
-								<label className={styles.modalFieldLabel}>
-									종료일
-									<AdminDateInput
-										value={createForm.endDt}
-										onChange={(event) => setCreateForm((prevState) => ({ ...prevState, endDt: event.target.value }))}
-										disabled={isCreateSaving}
-									/>
-								</label>
-							</div>
-
-							<label className={styles.modalFieldLabel}>
-								사유
-								<input
-									type="text"
-									className={styles.modalFieldControl}
-									value={createForm.vacationMemo}
-									onChange={(event) => setCreateForm((prevState) => ({ ...prevState, vacationMemo: event.target.value }))}
-									disabled={isCreateSaving}
-								/>
-							</label>
+							<VacationSaveFormFields
+								form={createForm}
+								personList={personList}
+								companyList={companyList}
+								vacationCodeList={vacationCodeList}
+								isSaving={isCreateSaving}
+								onChange={handleChangeCreateForm}
+							/>
 
 							<div className={styles.modalActionRow}>
 								<button type="submit" className={styles.primaryButton} disabled={isCreateSaving}>
 									{isCreateSaving ? "등록 중..." : "등록"}
 								</button>
 								<button type="button" className={styles.secondaryButton} onClick={() => setIsCreateModalOpen(false)} disabled={isCreateSaving}>
+									취소
+								</button>
+							</div>
+						</form>
+					</VacationModalShell>
+				) : null}
+
+				{isEditModalOpen && editForm ? (
+					<VacationModalShell title="휴가수정" onClose={handleCloseEditModal}>
+						<form className={styles.modalForm} onSubmit={(event) => void handleSubmitEdit(event)}>
+							<VacationSaveFormFields
+								form={editForm}
+								personList={personList}
+								companyList={companyList}
+								vacationCodeList={vacationCodeList}
+								isSaving={isEditSaving}
+								onChange={handleChangeEditForm}
+							/>
+
+							<div className={styles.modalActionRow}>
+								<button type="submit" className={styles.primaryButton} disabled={isEditSaving}>
+									{isEditSaving ? "저장 중..." : "저장"}
+								</button>
+								<button type="button" className={styles.secondaryButton} onClick={handleCloseEditModal} disabled={isEditSaving}>
 									취소
 								</button>
 							</div>

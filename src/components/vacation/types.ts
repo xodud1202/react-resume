@@ -143,3 +143,21 @@ export interface VacationCreateResponse {
 	// 등록된 휴가 번호입니다.
 	vacationSeq: number;
 }
+
+// 휴가 수정 요청을 정의합니다.
+export interface VacationUpdateRequest extends VacationCreateRequest {
+	// 수정할 휴가 번호입니다.
+	vacationSeq: number;
+}
+
+// 휴가 삭제 요청을 정의합니다.
+export interface VacationDeleteRequest {
+	// 삭제할 휴가 번호입니다.
+	vacationSeq: number;
+}
+
+// 휴가 변경 응답을 정의합니다.
+export interface VacationMutationResponse {
+	// 처리 메시지입니다.
+	message: string;
+}

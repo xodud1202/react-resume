@@ -3,11 +3,14 @@ import type {
 	VacationCompanyOption,
 	VacationCreateRequest,
 	VacationCreateResponse,
+	VacationDeleteRequest,
 	VacationListFilter,
 	VacationListResponse,
 	VacationListRow,
+	VacationMutationResponse,
 	VacationPersonOption,
 	VacationSummaryRow,
+	VacationUpdateRequest,
 } from "@/components/vacation/types";
 import type { WorkClientApiResult } from "@/services/workApiService";
 import { requestWorkClientApi } from "@/services/workApiService";
@@ -177,6 +180,22 @@ export async function fetchVacationList(filter: VacationListFilter): Promise<Wor
 // 휴가 사용 내역을 등록합니다.
 export async function createVacation(command: VacationCreateRequest): Promise<WorkClientApiResult<VacationCreateResponse>> {
 	return requestWorkClientApi<VacationCreateResponse>("/api/work/vacation", {
+		method: "POST",
+		body: command,
+	});
+}
+
+// 휴가 사용 내역을 수정합니다.
+export async function updateVacation(command: VacationUpdateRequest): Promise<WorkClientApiResult<VacationMutationResponse>> {
+	return requestWorkClientApi<VacationMutationResponse>("/api/work/vacation/update", {
+		method: "POST",
+		body: command,
+	});
+}
+
+// 휴가 사용 내역을 삭제합니다.
+export async function deleteVacation(command: VacationDeleteRequest): Promise<WorkClientApiResult<VacationMutationResponse>> {
+	return requestWorkClientApi<VacationMutationResponse>("/api/work/vacation/delete", {
 		method: "POST",
 		body: command,
 	});

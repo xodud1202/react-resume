@@ -440,13 +440,55 @@
 	text-align: center;
 }
 
-.vacationTable th:last-child,
+.vacationTable th:nth-child(7),
 .vacationTable .memoCell {
 	text-align: left;
 }
 
 .dataTable tr:last-child td {
 	border-bottom: 0;
+}
+
+.actionCell {
+	min-width: 132px;
+	text-align: center;
+	white-space: normal;
+}
+
+.tableActionButton {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 52px;
+	min-height: 32px;
+	margin: 0.16rem;
+	padding: 0 0.65rem;
+	border: 1px solid var(--vacation-border);
+	border-radius: 8px;
+	background: rgba(8, 13, 13, 0.74);
+	color: var(--vacation-ink);
+	cursor: pointer;
+	font-size: 0.78rem;
+	font-weight: 900;
+	transition:
+		border-color 0.14s ease,
+		background 0.14s ease,
+		color 0.14s ease;
+}
+
+.tableActionButton:hover {
+	border-color: rgba(45, 212, 191, 0.58);
+	background: var(--vacation-accent-soft);
+}
+
+.tableActionButton:disabled {
+	cursor: not-allowed;
+	opacity: 0.58;
+}
+
+.dangerActionButton:hover {
+	border-color: rgba(248, 113, 113, 0.72);
+	background: rgba(248, 113, 113, 0.14);
 }
 
 .memoCell {
