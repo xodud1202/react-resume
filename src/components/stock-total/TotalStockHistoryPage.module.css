@@ -147,7 +147,8 @@
 }
 
 .historyTableShell {
-	overflow-x: auto;
+	height: var(--total-stock-table-shell-height);
+	overflow: auto;
 }
 
 .cashHistoryTableShell {
@@ -377,6 +378,7 @@ thead .stickyLabelCell {
 		white-space: normal;
 	}
 
+	.historyTableShell,
 	.cashHistoryTableShell {
 		height: auto;
 		max-height: none;
