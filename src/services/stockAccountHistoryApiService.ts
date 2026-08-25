@@ -59,6 +59,9 @@ function toTotalStockHistoryQueryString(filter: TotalStockHistoryFilter): string
 	if (typeof filter.cashHistoryOffset === "number" && filter.cashHistoryOffset > 0) {
 		searchParams.set("cashHistoryOffset", String(filter.cashHistoryOffset));
 	}
+	if (filter.historyViewType && filter.historyViewType !== "ALL") {
+		searchParams.set("historyViewType", filter.historyViewType);
+	}
 	for (const accountCode of filter.stockAccountCdList ?? []) {
 		if (accountCode.trim() !== "") {
 			searchParams.append("stockAccountCdList", accountCode.trim());

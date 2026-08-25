@@ -11,6 +11,7 @@ import type {
 	TotalStockDailyHistoryRow,
 	TotalStockHistoryResponse,
 	TotalStockHistoryValueRow,
+	TotalStockHistoryViewType,
 } from "@/components/stock-total/types";
 import type { StockSaleBootstrapResponse, StockSaleCreateRequest, StockSaleOption } from "@/components/stock-sale/types";
 import AdminDateInput from "@/components/work/AdminDateInput";
@@ -22,6 +23,12 @@ import styles from "./TotalStockHistoryPage.module.css";
 
 const TOTAL_STOCK_PAGE_PATH = "/work/totalstock";
 const ACCOUNT_FAVORITE_STORAGE_KEY = "react-resume:stock-sale:favorite-account-codes";
+// 계좌별 전체 이력 정보의 표시 기준 선택 목록입니다.
+const HISTORY_VIEW_OPTION_LIST: ReadonlyArray<{ value: TotalStockHistoryViewType; label: string }> = [
+	{ value: "ALL", label: "전체보기" },
+	{ value: "MONTH_START", label: "월별보기(월초)" },
+	{ value: "MONTH_END", label: "월별보기(월말)" },
+];
 
 type TotalStockTabType = "monthly" | "history" | "cashHistory";
 
@@ -526,6 +533,7 @@ export default function TotalStockHistoryPage() {
 	const [isCashHistorySaving, setIsCashHistorySaving] = useState(false);
 	const [isCashHistoryEditMode, setIsCashHistoryEditMode] = useState(false);
 	const [activeTab, setActiveTab] = useState<TotalStockTabType>("monthly");
+	const [historyViewType, setHistoryViewType] = useState<TotalStockHistoryViewType>("ALL");
 	const [bootstrap, setBootstrap] = useState<StockSaleBootstrapResponse | null>(null);
 	const [historyResponse, setHistoryResponse] = useState<TotalStockHistoryResponse>(createEmptyTotalStockHistoryResponse);
 	const [selectedAccountCodeList, setSelectedAccountCodeList] = useState<string[]>([]);
@@ -576,6 +584,7 @@ export default function TotalStockHistoryPage() {
 	// 선택 계좌 조건으로 주식계좌이력을 조회합니다.
 	const loadTotalStockHistory = useCallback(async (
 		nextAccountCodeList: string[],
+		nextHistoryViewType: TotalStockHistoryViewType,
 		historyOffset: number,
 		appendHistory: boolean,
 		cashHistoryOffset = 0,
@@ -585,6 +594,7 @@ export default function TotalStockHistoryPage() {
 		try {
 			const result = await fetchTotalStockHistory({
 				stockAccountCdList: nextAccountCodeList,
+				historyViewType: nextHistoryViewType,
 				historyOffset,
 				cashHistoryOffset,
 			});
@@ -648,7 +658,7 @@ export default function TotalStockHistoryPage() {
 				setFavoriteAccountCodeSet(nextFavoriteAccountCodeSet);
 				setSelectedAccountCodeList(nextSelectedAccountCodeList);
 				setBootstrap(bootstrapResult.data);
-				await loadTotalStockHistory(nextSelectedAccountCodeList, 0, false);
+				await loadTotalStockHistory(nextSelectedAccountCodeList, "ALL", 0, false);
 			} finally {
 				if (!isCancelled) {
 					setIsInitializing(false);
@@ -666,7 +676,7 @@ export default function TotalStockHistoryPage() {
 	const handleToggleAccountSelect = (code: string) => {
 		const nextAccountCodeList = toggleCodeListValue(selectedAccountCodeList, code);
 		setSelectedAccountCodeList(nextAccountCodeList);
-		void loadTotalStockHistory(nextAccountCodeList, 0, false);
+		void loadTotalStockHistory(nextAccountCodeList, historyViewType, 0, false);
 	};
 
 	// 계좌 즐겨찾기 상태를 토글합니다.
@@ -681,12 +691,21 @@ export default function TotalStockHistoryPage() {
 	// 계좌 선택 조건을 해제하고 목록을 조회합니다.
 	const handleClearAccountSelect = () => {
 		setSelectedAccountCodeList([]);
-		void loadTotalStockHistory([], 0, false);
+		void loadTotalStockHistory([], historyViewType, 0, false);
+	};
+
+	// 계좌별 전체 이력 표시 기준을 변경하고 첫 페이지부터 다시 조회합니다.
+	const handleHistoryViewTypeChange = (nextHistoryViewType: TotalStockHistoryViewType) => {
+		if (nextHistoryViewType === historyViewType) {
+			return;
+		}
+		setHistoryViewType(nextHistoryViewType);
+		void loadTotalStockHistory(selectedAccountCodeList, nextHistoryViewType, 0, false);
 	};
 
 	// 더보기 버튼으로 확인일별 이력을 추가 조회합니다.
 	const handleLoadMoreHistory = () => {
-		void loadTotalStockHistory(selectedAccountCodeList, historyResponse.historyRowList.length, true);
+		void loadTotalStockHistory(selectedAccountCodeList, historyViewType, historyResponse.historyRowList.length, true);
 	};
 
 	// 스크롤 하단 접근 시 입출금 이력을 추가 조회합니다.
@@ -694,7 +713,7 @@ export default function TotalStockHistoryPage() {
 		if (isListLoading || !historyResponse.cashHistoryHasMore) {
 			return;
 		}
-		void loadTotalStockHistory(selectedAccountCodeList, 0, false, historyResponse.cashHistoryRowList.length, true);
+		void loadTotalStockHistory(selectedAccountCodeList, historyViewType, 0, false, historyResponse.cashHistoryRowList.length, true);
 	};
 
 	// 입출금 이력 스크롤 위치를 확인해 더보기 조회를 실행합니다.
@@ -780,7 +799,7 @@ export default function TotalStockHistoryPage() {
 			setIsCheckAmountLayerOpen(false);
 			setIsCheckAmountDateLocked(false);
 			showSuccess(result.data?.message || "계좌확인금액을 저장했습니다.");
-			await loadTotalStockHistory(selectedAccountCodeList, 0, false);
+			await loadTotalStockHistory(selectedAccountCodeList, historyViewType, 0, false);
 		} finally {
 			setIsCheckAmountSaving(false);
 		}
@@ -856,7 +875,7 @@ export default function TotalStockHistoryPage() {
 			setIsCashHistoryLayerOpen(false);
 			setIsCashHistoryEditMode(false);
 			showSuccess(result.data?.message || (isCashHistoryEditMode ? "입출금 내역을 수정했습니다." : "입출금 내역을 등록했습니다."));
-			await loadTotalStockHistory(selectedAccountCodeList, 0, false);
+			await loadTotalStockHistory(selectedAccountCodeList, historyViewType, 0, false);
 		} finally {
 			setIsCashHistorySaving(false);
 		}
@@ -914,7 +933,7 @@ export default function TotalStockHistoryPage() {
 			}
 			setIsCreateLayerOpen(false);
 			showSuccess(result.data?.message || "매매일지를 등록했습니다.");
-			await loadTotalStockHistory(selectedAccountCodeList, 0, false);
+			await loadTotalStockHistory(selectedAccountCodeList, historyViewType, 0, false);
 		} finally {
 			setIsCreateSaving(false);
 		}
@@ -1100,7 +1119,30 @@ export default function TotalStockHistoryPage() {
 									</table>
 								</div>
 							) : activeTab === "history" ? (
-								<div className={styles.historyTableShell}>
+								<section className={styles.historyContent}>
+									<div className={styles.historyViewModeGroup} role="radiogroup" aria-label="계좌별 전체 이력 표시 기준">
+										<span className={styles.historyViewModeLabel}>표시 기준</span>
+										{HISTORY_VIEW_OPTION_LIST.map((optionItem) => {
+											const isSelected = historyViewType === optionItem.value;
+											return (
+												<label
+													key={optionItem.value}
+													className={`${styles.historyViewModeOption} ${isSelected ? styles.historyViewModeOptionActive : ""}`}
+												>
+													<input
+														type="radio"
+														name="totalStockHistoryViewType"
+														value={optionItem.value}
+														checked={isSelected}
+														onChange={() => handleHistoryViewTypeChange(optionItem.value)}
+														disabled={isListLoading}
+													/>
+													<span>{optionItem.label}</span>
+												</label>
+											);
+										})}
+									</div>
+									<div className={styles.historyTableShell}>
 									<table className={`${styles.historyTable} ${styles.accountHistoryTable}`}>
 										<colgroup>
 											<col className={styles.accountHistoryDateColumn} />
@@ -1168,7 +1210,8 @@ export default function TotalStockHistoryPage() {
 											</button>
 										</div>
 									) : null}
-								</div>
+									</div>
+								</section>
 							) : (
 								<div className={styles.cashHistoryTableShell} onScroll={handleCashHistoryScroll}>
 									<table className={`${styles.historyTable} ${styles.cashHistoryTable}`}>

@@ -6,6 +6,9 @@ export interface TotalStockHistoryMonth {
 	monthLabel: string;
 }
 
+// 계좌별 전체 이력 정보의 표시 기준을 정의합니다.
+export type TotalStockHistoryViewType = "ALL" | "MONTH_START" | "MONTH_END";
+
 // 주식계좌이력 월별 지표 행을 정의합니다.
 export interface TotalStockHistoryValueRow {
 	// 행 식별값입니다.
@@ -98,6 +101,8 @@ export interface TotalStockHistoryFilter {
 	historyOffset?: number;
 	// 입출금 이력 시작 위치입니다.
 	cashHistoryOffset?: number;
+	// 계좌별 전체 이력 표시 기준입니다.
+	historyViewType?: TotalStockHistoryViewType;
 }
 
 // 계좌 확인 평가금 저장 요청 행을 정의합니다.
