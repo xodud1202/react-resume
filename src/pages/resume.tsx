@@ -61,7 +61,7 @@ export const getServerSideProps: GetServerSideProps<ResumePageProps> = async (ct
 
 	try {
 		// 서버 사이드 fetch는 절대 URL로 /api 리라이트 경로를 직접 호출합니다.
-		const response = await fetch(`https://be.xodud1202.kro.kr/api/resume/info?loginId=${encodeURIComponent(loginId)}`, {
+		const response = await fetch(`http://localhost:3010/api/resume/info?loginId=${encodeURIComponent(loginId)}`, {
 			method: "GET",
 			headers: { "Content-Type": "application/json" },
 		});
