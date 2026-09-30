@@ -2,6 +2,7 @@
 
 ### 1) 현재 코드 구조
 - `src/pages/`: 페이지 진입점을 관리한다.
+- `src/app/healthcheck/route.ts`: 서버 상태 확인용 HTTP 응답을 관리한다.
 - `src/components/`: 화면 컴포넌트를 관리한다.
 - `src/services/`: 프론트 API 호출과 화면용 서비스 로직을 관리한다.
 - `src/styles/`, `src/utils/`: 스타일과 공통 유틸을 관리한다.
@@ -14,3 +15,9 @@
 ### 3) 문서 확장 규칙
 - 이력서 도메인이 세분화되면 본 문서 아래에 하위 문서를 추가한다.
 - 상세 판단 기준은 `AGENTS.md`에 누적하지 않고 `docs/`로 내린다.
+
+### 4) 서버 상태 확인
+- `GET /healthcheck`는 로그인 없이 HTTP `200`, 평문 본문 `OK`를 반환한다.
+- `Cache-Control: no-store`와 동적 라우트를 사용해 요청마다 현재 프론트 서버에서 응답한다.
+- `node-batch`의 성공 기준인 HTTP `2xx`와 `body.trim() === "OK"`에 맞춘 응답이다.
+- 프론트 서버의 응답 가능 여부만 확인하며, Spring API나 DB의 상태를 조회하지 않는다.
