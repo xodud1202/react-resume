@@ -20,6 +20,7 @@ import { createTotalStockCashHistory, fetchTotalStockHistory, saveTotalStockChec
 import { logoutWork, refreshWorkSession } from "@/services/workApiService";
 import stockStyles from "@/components/stock-sale/StockSaleHistoryPage.module.css";
 import styles from "./TotalStockHistoryPage.module.css";
+import TotalStockProfitGraph from "./TotalStockProfitGraph";
 
 const TOTAL_STOCK_PAGE_PATH = "/work/totalstock";
 const ACCOUNT_FAVORITE_STORAGE_KEY = "react-resume:stock-sale:favorite-account-codes";
@@ -30,7 +31,7 @@ const HISTORY_VIEW_OPTION_LIST: ReadonlyArray<{ value: TotalStockHistoryViewType
 	{ value: "MONTH_END", label: "월별보기(월말)" },
 ];
 
-type TotalStockTabType = "monthly" | "history" | "cashHistory";
+type TotalStockTabType = "monthly" | "history" | "profitGraph" | "cashHistory";
 
 interface OptionButtonListProps {
 	// 선택 목록 제목입니다.
@@ -93,6 +94,7 @@ function createEmptyTotalStockHistoryResponse(): TotalStockHistoryResponse {
 		summaryRowList: [],
 		accountGroupList: [],
 		historyRowList: [],
+		profitGraphPointList: [],
 		historyTotalCount: 0,
 		historyPageSize: 50,
 		historyHasMore: false,
@@ -1015,8 +1017,8 @@ export default function TotalStockHistoryPage() {
 						</div>
 					) : null}
 
-					<main className={stockStyles.contentPanel}>
-						<section className={`${stockStyles.gridPanel} ${styles.contentPanel}`}>
+					<main className={`${stockStyles.contentPanel} ${activeTab === "profitGraph" ? styles.profitGraphMainPanel : ""}`}>
+						<section className={`${stockStyles.gridPanel} ${styles.contentPanel} ${activeTab === "profitGraph" ? styles.profitGraphContentPanel : ""}`}>
 							<div className={stockStyles.contentHeader}>
 								<div>
 									<p className={stockStyles.eyebrow}>account history</p>
@@ -1045,6 +1047,15 @@ export default function TotalStockHistoryPage() {
 									aria-selected={activeTab === "history"}
 								>
 									계좌별 전체 이력 정보
+								</button>
+								<button
+									type="button"
+									className={`${styles.tabButton} ${activeTab === "profitGraph" ? styles.tabButtonActive : ""}`}
+									onClick={() => setActiveTab("profitGraph")}
+									role="tab"
+									aria-selected={activeTab === "profitGraph"}
+								>
+									원금대비손익율(그래프)
 								</button>
 								<button
 									type="button"
@@ -1212,6 +1223,8 @@ export default function TotalStockHistoryPage() {
 									) : null}
 									</div>
 								</section>
+							) : activeTab === "profitGraph" ? (
+								<TotalStockProfitGraph pointList={historyResponse.profitGraphPointList} />
 							) : (
 								<div className={styles.cashHistoryTableShell} onScroll={handleCashHistoryScroll}>
 									<table className={`${styles.historyTable} ${styles.cashHistoryTable}`}>

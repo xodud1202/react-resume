@@ -9,6 +9,7 @@ import type {
 	TotalStockHistoryResponse,
 	TotalStockSaveResponse,
 	TotalStockHistoryValueRow,
+	TotalStockProfitGraphPoint,
 } from "@/components/stock-total/types";
 import type { WorkClientApiResult } from "@/services/workApiService";
 import { requestWorkClientApi } from "@/services/workApiService";
@@ -112,6 +113,19 @@ function normalizeDailyHistoryRow(row: Partial<TotalStockDailyHistoryRow> | null
 	};
 }
 
+// 그래프 금액을 정규화하고 계산 불가 비율은 null로 유지합니다.
+function normalizeProfitGraphPoint(point: Partial<TotalStockProfitGraphPoint>): TotalStockProfitGraphPoint {
+	// 누락되거나 유효하지 않은 비율을 0%로 대체하지 않습니다.
+	const ratio = point?.principalRatio;
+	return {
+		checkDt: resolveStringValue(point?.checkDt),
+		principalAmt: resolveNumberValue(point?.principalAmt),
+		checkAmt: resolveNumberValue(point?.checkAmt),
+		principalRatio: ratio !== null && ratio !== undefined && String(ratio).trim() !== "" && Number.isFinite(Number(ratio))
+			? Number(ratio) : null,
+	};
+}
+
 // 입출금 이력 행 응답을 화면 기본값으로 정규화합니다.
 function normalizeCashHistoryRow(row: Partial<TotalStockCashHistoryRow> | null | undefined): TotalStockCashHistoryRow {
 	return {
@@ -132,6 +146,7 @@ function normalizeTotalStockHistoryResponse(data: Partial<TotalStockHistoryRespo
 		summaryRowList: resolveArrayValue(data?.summaryRowList).map((rowItem) => normalizeValueRow(rowItem)),
 		accountGroupList: resolveArrayValue(data?.accountGroupList).map((groupItem) => normalizeAccountGroup(groupItem)),
 		historyRowList: resolveArrayValue(data?.historyRowList).map((rowItem) => normalizeDailyHistoryRow(rowItem)),
+		profitGraphPointList: resolveArrayValue(data?.profitGraphPointList).map((point) => normalizeProfitGraphPoint(point)),
 		historyTotalCount: resolveNumberValue(data?.historyTotalCount),
 		historyPageSize: resolveNumberValue(data?.historyPageSize),
 		historyHasMore: resolveBooleanValue(data?.historyHasMore),

@@ -16,8 +16,19 @@
 	grid-auto-rows: max-content;
 }
 
+main.profitGraphMainPanel {
+	height: auto;
+	align-self: start;
+}
+
+.contentPanel.profitGraphContentPanel {
+	height: auto;
+	min-height: 0;
+}
+
 .tabBar {
 	display: inline-flex;
+	flex-wrap: wrap;
 	align-items: center;
 	align-self: start;
 	min-width: 0;
@@ -472,5 +483,12 @@ thead .stickyLabelCell {
 	.checkAmountEntryRow {
 		grid-template-columns: minmax(0, 1fr);
 		gap: 0.45rem;
+	}
+}
+
+@media (max-width: 640px) {
+	.tabButton {
+		flex: 1 1 50%;
+		min-height: 2.8rem;
 	}
 }

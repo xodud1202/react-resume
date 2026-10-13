@@ -51,6 +51,18 @@ export interface TotalStockDailyHistoryRow {
 	checkAccountAmountMap: Record<string, number>;
 }
 
+// 원금 100% 기준 그래프의 확인일별 원천을 정의합니다.
+export interface TotalStockProfitGraphPoint {
+	// 실제 평가금 확인일입니다.
+	checkDt: string;
+	// 확인일까지 입금에서 출금을 뺀 누적 원금입니다.
+	principalAmt: number;
+	// 확인일의 선택 계좌 평가금 합계입니다.
+	checkAmt: number;
+	// 평가금 / 원금 * 100이며, 원금이 0 이하이면 null입니다.
+	principalRatio: number | null;
+}
+
 // 주식계좌 입출금 이력 행을 정의합니다.
 export interface TotalStockCashHistoryRow {
 	// 입출금 이력 식별자입니다.
@@ -79,6 +91,8 @@ export interface TotalStockHistoryResponse {
 	accountGroupList: TotalStockHistoryAccountGroup[];
 	// 확인일별 이력 목록입니다.
 	historyRowList: TotalStockDailyHistoryRow[];
+	// 표의 페이지와 표시 기준에 관계없는 전체 그래프 원천입니다.
+	profitGraphPointList: TotalStockProfitGraphPoint[];
 	// 확인일별 전체 건수입니다.
 	historyTotalCount: number;
 	// 확인일별 페이지 크기입니다.

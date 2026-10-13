@@ -15,6 +15,11 @@
 - 실제 화면 기준 시나리오가 확인되어야 한다.
 - 미실행 항목은 결과 보고에 이유를 남긴다.
 
+### 주식계좌 손익율 그래프
+
+- `node harness/total-stock-profit-graph.test.cjs`로 날짜 단위와 기간 계산을 확인한다.
+- [2026-10-13 그래프 검증 기록](validation-2026-10-13-total-stock-profit-graph.md)에서 DB·브라우저·백엔드 검증 범위와 결과를 확인한다.
+
 ### 서버 상태 확인 검증
 - 서버 실행 후 `curl.exe -i http://127.0.0.1:3013/healthcheck`로 실제 HTTP 응답을 확인한다.
 - 쿠키 없이 HTTP `200`, `Content-Type: text/plain; charset=utf-8`, 본문 `OK`, `Cache-Control: no-store`가 반환되어야 한다.
