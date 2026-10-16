@@ -12,6 +12,12 @@ const WORK_API_PROXY_TARGET =
 		? "http://localhost:3010/api/work/:path*"
 		: "https://be.xodud1202.kro.kr/api/work/:path*";
 
+// 새 뉴스 요약 조회만 개발환경의 로컬 Spring으로 연결합니다.
+const NEWS_SUMMARY_API_PROXY_TARGET =
+	process.env.NODE_ENV === "development"
+		? "http://localhost:3010/api/news/daily/summary/:path*"
+		: "https://be.xodud1202.kro.kr/api/news/daily/summary/:path*";
+
 const nextConfig: NextConfig = {
     output: 'standalone',
     images: {
@@ -30,6 +36,11 @@ const nextConfig: NextConfig = {
      */
     async rewrites() {
         return [
+            {
+                // 기존 뉴스 모아보기 프록시와 독립된 요약 조회 경로입니다.
+                source: '/api/news/daily/summary/:path*',
+                destination: NEWS_SUMMARY_API_PROXY_TARGET,
+            },
             {
                 // 뉴스 API: 백엔드 경로에 /api/ 접두사 유지
                 source: '/api/last/news/:path*',
