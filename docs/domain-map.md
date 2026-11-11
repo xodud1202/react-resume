@@ -21,3 +21,9 @@
 - `Cache-Control: no-store`와 동적 라우트를 사용해 요청마다 현재 프론트 서버에서 응답한다.
 - `node-batch`의 성공 기준인 HTTP `2xx`와 `body.trim() === "OK"`에 맞춘 응답이다.
 - 프론트 서버의 응답 가능 여부만 확인하며, Spring API나 DB의 상태를 조회하지 않는다.
+
+### 5) 꾸깃 공개 문서
+- `/app/notice/kkugit/privacy`와 `/app/notice/kkugit/terms`는 공통 메뉴 없이 처리방침과 서비스 약관을 표시한다.
+- `src/components/notice/KkugitNoticePage.tsx`에서 문서 표시와 조회 상태 처리를 공유하고 `src/services/boardApiService.ts`로 조회한다.
+- `/api/resume/notice/kkugit/privacy`는 `KKUGIT_PRIVACY`, `/api/resume/notice/kkugit/terms`는 `KKUGIT_TERMS`로 조회한다.
+- 실제 조회는 `spring-back-end`의 공용 게시판 서비스·매퍼를 사용하며 삭제되지 않은 공개 글 중 게시글 번호가 가장 큰 한 건을 반환한다.
