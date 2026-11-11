@@ -18,6 +18,12 @@ const NEWS_SUMMARY_API_PROXY_TARGET =
 		? "http://localhost:3010/api/news/daily/summary/:path*"
 		: "https://be.xodud1202.kro.kr/api/news/daily/summary/:path*";
 
+// 공개 게시글 API는 개발환경에서 로컬 Spring으로 연결합니다.
+const RESUME_NOTICE_API_PROXY_TARGET =
+	process.env.NODE_ENV === "development"
+		? "http://localhost:3010/api/resume/notice/:path*"
+		: "https://be.xodud1202.kro.kr/api/resume/notice/:path*";
+
 const nextConfig: NextConfig = {
     output: 'standalone',
     images: {
@@ -36,6 +42,11 @@ const nextConfig: NextConfig = {
      */
     async rewrites() {
         return [
+            {
+                // 개인정보 처리방침 조회에서도 /api 접두사를 그대로 유지합니다.
+                source: '/api/resume/notice/:path*',
+                destination: RESUME_NOTICE_API_PROXY_TARGET,
+            },
             {
                 // 기존 뉴스 모아보기 프록시와 독립된 요약 조회 경로입니다.
                 source: '/api/news/daily/summary/:path*',

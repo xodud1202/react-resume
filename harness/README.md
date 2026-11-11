@@ -19,6 +19,10 @@
 - 실제 화면 기준 시나리오가 확인되어야 한다.
 - 미실행 항목은 결과 보고에 이유를 남긴다.
 
+### 꾸깃 개인정보 처리방침
+- `/app/notice/kkugit/privacy`에서 공통 메뉴 없이 최신 공개 게시글의 제목과 본문을 확인한다.
+- [2026-11-11 검증 기록](validation-2026-11-11-kkugit-privacy.md)에서 실제 DB 조회, API, PC·모바일 화면, 서버 종료 결과를 확인한다.
+
 ### 주식계좌 손익율 그래프
 
 - `node harness/total-stock-profit-graph.test.cjs`로 날짜 단위와 기간 계산을 확인한다.

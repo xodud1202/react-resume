@@ -1,0 +1,47 @@
+/* 주변 레이아웃 없이 흰 배경과 문서 여백만 제공합니다. */
+.page {
+  min-height: 100vh;
+  padding: 40px 20px;
+  background: #fff;
+  color: #222;
+}
+
+.policy {
+  max-width: 800px;
+  margin: 0 auto;
+  overflow-wrap: anywhere;
+}
+
+.title {
+  margin: 0 0 28px;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+/* 일반 텍스트 본문의 개행과 빈 줄을 그대로 표시합니다. */
+.content {
+  white-space: pre-wrap;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.message {
+  margin: 0;
+  color: #666;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.retry {
+  margin-top: 12px;
+  color: #222;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 28px 20px;
+  }
+}
