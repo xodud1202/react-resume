@@ -5,7 +5,6 @@ import {
   type NewsSummary,
   type NewsSummaryWeek,
 } from "@/services/newsSummaryApiService";
-import { getNewsSummaryHeaderCompact } from "@/utils/newsSummaryHeader";
 import { getNewsSummaryDays } from "@/utils/newsSummaryDate";
 import { getNewsSummaryReadKey } from "@/utils/newsSummaryStorage";
 import useNewsSummaryRead from "./useNewsSummaryRead";
@@ -24,26 +23,8 @@ export default function NewsSummaryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
-  const [headerCompact, setHeaderCompact] = useState(false);
   const dateRailRef = useRef<HTMLElement>(null);
   const { articleRefs, readOrders, history } = useNewsSummaryRead(summary);
-
-  useEffect(() => {
-    let frame = 0;
-    function updateHeader() {
-      frame = 0;
-      setHeaderCompact((current) => getNewsSummaryHeaderCompact(window.scrollY, current));
-    }
-    function handleScroll() {
-      if (!frame) frame = window.requestAnimationFrame(updateHeader);
-    }
-    updateHeader();
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", handleScroll);
-      if (frame) window.cancelAnimationFrame(frame);
-    };
-  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -94,7 +75,7 @@ export default function NewsSummaryPage() {
     revealSelectedDate();
     window.addEventListener("resize", revealSelectedDate, { passive: true });
     return () => window.removeEventListener("resize", revealSelectedDate);
-  }, [week?.today, selectedDate, headerCompact]);
+  }, [week?.today, selectedDate]);
 
   /** 날짜 전환 전에 이전 본문을 비워 늦게 도착한 응답과 읽음 기록이 섞이지 않게 합니다. */
   function selectDate(date: string) {
@@ -120,7 +101,7 @@ export default function NewsSummaryPage() {
   return (
     <div className={styles.page}>
       <main className={styles.reader}>
-        <header className={`${styles.stickyHeader} ${headerCompact ? styles.headerCompact : ""}`} data-compact={headerCompact}>
+        <header className={`${styles.stickyHeader} ${styles.headerCompact}`} data-compact="true">
           <div className={styles.brandRow}>
             <div className={styles.brand}>
               <span className={styles.brandIcon} aria-hidden="true">

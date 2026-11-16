@@ -54,14 +54,12 @@ test("저장소 접근 불가와 손상된 기록을 안전하게 처리한다",
   assert.deepEqual(storage.loadNewsSummaryReadHistory(), {});
 });
 
-test("compact header has stable entry and exit thresholds", () => {
-  const header = loadUtility("newsSummaryHeader");
-  assert.equal(header.getNewsSummaryHeaderCompact(0, false), false);
-  assert.equal(header.getNewsSummaryHeaderCompact(128, false), false);
-  assert.equal(header.getNewsSummaryHeaderCompact(129, false), true);
-  assert.equal(header.getNewsSummaryHeaderCompact(60, true), true);
-  assert.equal(header.getNewsSummaryHeaderCompact(24, true), false);
-  assert.equal(header.getNewsSummaryHeaderCompact(-10, true), false);
+test("header is compact from the first render without scroll resizing", () => {
+  const page = fs.readFileSync(path.resolve(__dirname, "../src/components/news-summary/NewsSummaryPage.tsx"), "utf8");
+  assert.ok(page.includes('styles.stickyHeader} ${styles.headerCompact}'));
+  assert.ok(page.includes('data-compact="true"'));
+  assert.ok(!page.includes("setHeaderCompact"));
+  assert.ok(!page.includes("getNewsSummaryHeaderCompact"));
 });
 
 test("reader uses tighter justified text without stretching final lines", () => {
