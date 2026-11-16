@@ -52,7 +52,7 @@
 .readStatus { display: flex; align-items: center; gap: 3px; margin-left: auto; color: #b4d4b7; font-size: 11px; }
 .readStatus svg { height: 21px; width: 21px; border: 1px solid #83ab8b; border-radius: 50%; }
 .unreadDot { width: 7px; height: 7px; border-radius: 50%; background: #435148; }
-.articleContent { margin: 0; font-size: 18px; font-weight: 400; line-height: 1.95; letter-spacing: -.4px; word-break: keep-all; overflow-wrap: anywhere; white-space: pre-wrap; }
+.articleContent { margin: 0; font-size: 18px; font-weight: 400; line-height: 1.65; letter-spacing: -.4px; word-break: break-all; overflow-wrap: anywhere; white-space: pre-wrap; text-align: justify; text-align-last: start; }
 .endMessage { padding: 54px 10px 38px; text-align: center; }
 .endIcon { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 50%; background: #1f2a23; color: #839e85; margin-bottom: 13px; }
 .endIcon svg { width: 26px; height: 26px; }
@@ -83,8 +83,25 @@
   .newsSection { padding-right: 16px; padding-left: 16px; }
   .listIntro { padding: 24px 4px 16px; }
   .article { padding: 22px 20px; border-radius: 18px; }
-  .articleContent { font-size: 17px; line-height: 1.95; letter-spacing: -.35px; }
+  .articleContent { font-size: 17px; line-height: 1.65; letter-spacing: -.35px; }
 }
+
+
+/* Compact reading controls keep a usable touch target and leave more room for cards. */
+.headerCompact { padding-top: max(10px, env(safe-area-inset-top)); }
+.headerCompact .brandRow { margin-bottom: 10px; }
+.headerCompact .brandIcon { width: 30px; height: 32px; border-radius: 10px 10px 10px 3px; }
+.headerCompact .brandIcon svg { width: 20px; height: 20px; }
+.headerCompact .brand h1 { font-size: 18px; }
+.headerCompact .brand p { display: none; }
+.headerCompact .edition { padding: 4px 8px; font-size: 10px; }
+.headerCompact .dateRail { gap: 7px; padding-bottom: 12px; }
+.headerCompact .dayButton { flex-basis: 52px; min-height: 48px; gap: 2px; border-radius: 11px; }
+.headerCompact .dayLabel { font-size: 12px; }
+.headerCompact .dateLabel { font-size: 10px; }
+.headerCompact .dayDot { width: 3px; height: 3px; }
+.headerCompact .progressHeading { padding-bottom: 8px; font-size: 11px; }
+.headerCompact .weekPlaceholder { height: 48px; }
 
 @media (prefers-reduced-motion: reduce) {
   .article, .dayButton, .progressTrack > span { transition: none; }
