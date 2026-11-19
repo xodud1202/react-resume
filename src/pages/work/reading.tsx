@@ -1,19 +1,26 @@
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { refreshWorkSession, requestWorkClientApi, type WorkClientApiRequestOptions } from "@/services/workApiService";
+
+import type { ColDef } from "ag-grid-community";
+import type { CustomCellRendererProps } from "ag-grid-react";
+import DarkDataGrid from "@/components/common/DarkDataGrid";
 
 const PATH = "/work/reading";
 const API = "/api/work/reading-records";
-const EMPTY = { title: "", author: "", translator: "", startedOn: "", completedOn: "", content: "", rating: "", notes: "" };
-const FILTERS = { title: "", author: "", from: "", to: "" };
-const SCORES = Array.from({ length: 11 }, (_, index) => (index / 2).toFixed(1));
+const MAX_ROUND = 2147483647;
+const EMPTY = { readingRound: "1", reread: false, title: "", author: "", translator: "", startedOn: "", completedOn: "", content: "", rating: "", notes: "" };
+const FILTERS = { title: "", author: "", from: "", to: "", reread: "" };
+const STARS = [1, 2, 3, 4, 5];
 const INPUT = "w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2.5 text-zinc-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400";
 const CARD = "rounded-2xl border border-zinc-800 bg-[#111111] p-5 shadow-sm sm:p-6";
 
 interface ReadingRecord {
 	id: number;
+	readingRound: number;
+	reread: boolean;
 	title: string;
 	author: string;
 	translator: string | null;
@@ -22,6 +29,64 @@ interface ReadingRecord {
 	content: string | null;
 	rating: number | null;
 	notes: string | null;
+}
+
+function ReadingRating({ value, readOnly, onChange }: { value: string; readOnly: boolean; onChange: (value: string) => void }) {
+	const [hover, setHover] = useState<number | null>(null);
+	const score = hover ?? Number(value);
+	return <div className="space-y-1 text-sm font-medium">
+		<span id="reading-rating-label">평점 (5점 만점)</span>
+		<div className="flex flex-wrap items-center gap-2">
+			<div role={readOnly ? "img" : "radiogroup"} aria-labelledby={readOnly ? undefined : "reading-rating-label"} aria-label={readOnly ? (value === "" ? "평점 없음" : "평점 " + value + "점") : undefined} onPointerLeave={() => setHover(null)} className="flex">
+				{STARS.map((star) => <span key={star} className="relative inline-flex h-11 w-8 items-center justify-center sm:w-9">
+					<span aria-hidden="true" className="relative inline-block select-none text-[2rem] leading-none text-zinc-600">
+						★<span className="pointer-events-none absolute inset-0 overflow-hidden whitespace-nowrap text-yellow-400" style={{width: Math.min(1, Math.max(0, score - star + 1)) * 100 + "%"}}>★</span>
+					</span>
+					{!readOnly && <span className="absolute inset-0 flex">
+						{[star - 0.5, star].map((half) => <label key={half} className="h-full w-1/2 cursor-pointer focus-within:rounded-sm focus-within:outline-2 focus-within:outline-teal-400" onPointerEnter={(event) => {if (event.pointerType === "mouse") setHover(half);}}>
+							<input type="radio" name="reading-rating" className="sr-only" aria-label={half.toFixed(1) + "점"} checked={Number(value) === half}
+								onChange={() => {setHover(null);onChange(half.toFixed(1));}} />
+						</label>)}
+					</span>}
+				</span>)}
+			</div>
+			<span className="min-w-11 tabular-nums text-zinc-200">{hover === null && value === "" ? "(—)" : "(" + score.toFixed(1) + ")"}</span>
+			{!readOnly && value !== "" && <button type="button" onClick={() => {setHover(null);onChange("");}} className="rounded px-2 py-1 text-xs text-zinc-300 underline underline-offset-2 hover:text-white">평점 지우기</button>}
+		</div>
+	</div>;
+}
+
+function ReadingGrid({ records, saving, onOpen }: {
+	records: ReadingRecord[];
+	saving: boolean;
+	onOpen: (kind: "detail" | "edit" | "delete", record: ReadingRecord) => void;
+}) {
+	const columns = useMemo<ColDef<ReadingRecord>[]>(() => [
+		{ field: "title", headerName: "제목", flex: 2, minWidth: 170,
+			cellRenderer: ({data}: CustomCellRendererProps<ReadingRecord>) => data && (
+				<button type="button" title={data.title} disabled={saving} onClick={() => onOpen("detail", data)} className="max-w-full truncate text-left font-semibold text-teal-200 underline-offset-4 hover:underline">{data.title}</button>
+			)
+		},
+		{ field: "author", headerName: "지은이", flex: 1, minWidth: 115, tooltipField: "author" },
+		{ field: "readingRound", headerName: "회차", width: 100, valueFormatter: ({value}) => String(value ?? 1), cellClass: "text-right tabular-nums" },
+		{ colId: "period", headerName: "독서 기간", width: 200, sortable: false,
+			valueGetter: ({data}) => data && (data.startedOn || data.completedOn) ? (data.startedOn ?? "미기록") + " ~ " + (data.completedOn ?? "미기록") : "—", cellClass: "text-center tabular-nums" },
+		{ field: "rating", headerName: "평점", width: 90, valueFormatter: ({value}) => value == null ? "—" : Number(value).toFixed(1), cellClass: "text-right tabular-nums" },
+		{ field: "reread", headerName: "다시 읽기", width: 100, cellDataType: false, valueFormatter: ({value}) => value ? "예" : "—", cellClass: "text-center" },
+		{ colId: "actions", headerName: "관리", width: 133, sortable: false, resizable: false,
+			cellRenderer: ({data}: CustomCellRendererProps<ReadingRecord>) => data && (
+				<div className="flex h-full items-center justify-end gap-1.5">
+					<button type="button" disabled={saving} aria-label={data.title + " 수정"} onClick={() => onOpen("edit", data)} className="rounded-md border border-zinc-700 px-2 py-1 text-sm leading-tight hover:bg-zinc-800">수정</button>
+					<button type="button" disabled={saving} aria-label={data.title + " 삭제"} onClick={() => onOpen("delete", data)} className="rounded-md border border-red-900 px-2 py-1 text-sm leading-tight text-red-300 hover:bg-red-950">삭제</button>
+				</div>
+			)
+		},
+	], [onOpen, saving]);
+	return <div role="region" aria-label="독서 기록 표">
+		<DarkDataGrid<ReadingRecord> rowData={records} columnDefs={columns} getRowId={({data}) => String(data.id)}
+			onGridReady={({api}) => api.setGridAriaProperty("label", "독서 기록")}
+			suppressCellFocus suppressColumnVirtualisation />
+	</div>;
 }
 
 export default function ReadingPage() {
@@ -99,7 +164,7 @@ export default function ReadingPage() {
 
 	useEffect(() => () => detailRequest.current?.abort(), []);
 
-	function open(kind: "create" | "edit" | "detail" | "delete", record?: ReadingRecord) {
+	const open = useCallback((kind: "create" | "edit" | "detail" | "delete", record?: ReadingRecord) => {
 		setFormError("");
 		setForm(EMPTY);
 		setDetailReady(false);
@@ -118,6 +183,7 @@ export default function ReadingPage() {
 					setDetailReady(true);
 					setDialog({kind, record: entry});
 					setForm({
+						readingRound: String(entry.readingRound ?? 1), reread: entry.reread === true,
 						title: entry.title, author: entry.author, translator: entry.translator ?? "",
 						startedOn: entry.startedOn ?? "", completedOn: entry.completedOn ?? "",
 						content: entry.content ?? "", rating: entry.rating?.toFixed(1) ?? "", notes: entry.notes ?? "",
@@ -129,7 +195,7 @@ export default function ReadingPage() {
 				if (!controller.signal.aborted) setDetailLoading(false);
 			}
 		})();
-	}
+	}, [request]);
 
 	function close() {
 		detailRequest.current?.abort();
@@ -161,7 +227,7 @@ export default function ReadingPage() {
 		}
 	}
 
-	function update(field: keyof typeof EMPTY, value: string) {
+	function update<K extends keyof typeof EMPTY>(field: K, value: typeof EMPTY[K]) {
 		setForm((previous) => ({ ...previous, [field]: value }));
 	}
 
@@ -170,6 +236,11 @@ export default function ReadingPage() {
 		if (saveLock.current || (dialog?.kind !== "create" && dialog?.kind !== "edit") || (dialog.kind === "edit" && (!detailReady || !dialog.record))) return;
 		setFormError("");
 		setSuccess("");
+		const round = Number(form.readingRound);
+		if (!/^\d+$/.test(form.readingRound) || !Number.isInteger(round) || round < 1 || round > MAX_ROUND) {
+			setFormError("독서 회차는 1 이상의 정수로 입력해 주세요.");
+			return;
+		}
 		if (!form.title.trim() || !form.author.trim()) {
 			setFormError("제목과 지은이를 입력해 주세요.");
 			return;
@@ -184,6 +255,8 @@ export default function ReadingPage() {
 			const result = await request<{ message: string }>({
 				method: dialog.kind === "edit" ? "PUT" : "POST",
 				body: {
+					readingRound: round,
+					reread: form.reread,
 					title: form.title.trim(),
 					author: form.author.trim(),
 					translator: form.translator.trim() || null,
@@ -211,7 +284,7 @@ export default function ReadingPage() {
 
 	return <>
 		<Head><title>독서 기록</title><meta name="robots" content="noindex, nofollow" /></Head>
-		<main className="min-h-screen bg-black px-4 py-8 text-zinc-50 [color-scheme:dark] sm:px-8">
+		<main className="min-h-screen bg-black px-4 py-8 text-zinc-50 [color-scheme:dark] [&_button:disabled]:cursor-not-allowed [&_button:enabled]:cursor-pointer [&_label:has(input:disabled)]:cursor-not-allowed sm:px-8">
 			<div className="mx-auto max-w-6xl">
 				<Link href="/" className="text-sm font-medium text-zinc-400 hover:text-zinc-50">← 메인 메뉴</Link>
 				<header className="my-6 flex items-center justify-between gap-3">
@@ -233,7 +306,8 @@ export default function ReadingPage() {
 								{label}<input className={INPUT} type={type} maxLength={200} value={filters[key]} onChange={(event) => setFilters({...filters, [key]: event.target.value})} />
 							</label>
 						))}
-						<div className="flex gap-2 sm:col-span-2 lg:col-span-4 lg:justify-end">
+						<div className="flex gap-2 flex-wrap items-center justify-end sm:col-span-2 lg:col-span-4">
+							<label className="mr-auto flex cursor-pointer items-center gap-2 text-sm"><input type="checkbox" checked={filters.reread === "true"} onChange={(event) => setFilters({...filters, reread: event.target.checked ? "true" : ""})} />다시 읽을 책만</label>
 							<button type="button" className="rounded-lg border border-zinc-700 px-4 py-2 hover:bg-zinc-800" onClick={() => {setFilters(FILTERS); setApplied({...FILTERS});setSearchError("");}}>초기화</button>
 							<button className="rounded-lg bg-teal-800 px-4 py-2 font-semibold hover:bg-teal-700">검색</button>
 						</div>
@@ -245,22 +319,10 @@ export default function ReadingPage() {
 					{loading ? <p role="status" className="p-5 text-zinc-400">기록을 불러오는 중…</p> :
 						listError ? <div className="p-5"><p role="alert" className="text-red-300">{listError}</p><button onClick={() => void loadRecords()} className="mt-2 underline">다시 조회</button></div> :
 						!records.length ? <p className="p-5 text-zinc-400">{Object.values(applied).some((item) => item.trim()) ? "검색 조건에 맞는 기록이 없습니다." : "아직 독서 기록이 없습니다."}</p> :
-						<ul className="divide-y divide-zinc-800">
-							{records.map((record) => <li key={record.id} className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6">
-								<div className="min-w-0">
-									<button type="button" disabled={saving} onClick={() => open("detail", record)} className="break-all text-left font-semibold text-teal-200 decoration-teal-500 underline-offset-4 hover:underline">{record.title}</button>
-									<p className="mt-1 break-all text-sm text-zinc-400">{record.author}</p>
-									{(record.startedOn || record.completedOn) && <p className="mt-1 text-xs text-zinc-400">{record.startedOn ?? "미기록"} ~ {record.completedOn ?? "미기록"}</p>}
-								</div>
-								<div className="flex shrink-0 gap-1.5">
-									<button type="button" disabled={saving} aria-label={record.title + " 수정"} onClick={() => open("edit", record)} className="rounded-md border border-zinc-700 px-2 py-1.5 text-sm hover:bg-zinc-800 sm:px-3">수정</button>
-									<button type="button" disabled={saving} aria-label={record.title + " 삭제"} onClick={() => open("delete", record)} className="rounded-md border border-red-900 px-2 py-1.5 text-sm text-red-300 hover:bg-red-950 sm:px-3">삭제</button>
-								</div>
-							</li>)}
-						</ul>}
+						<ReadingGrid records={records} saving={saving} onOpen={open} />}
 				</section>
 			</div>
-			{dialog && <dialog ref={modal} aria-labelledby="reading-dialog-title" className="[color-scheme:dark] m-auto max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-xl overflow-y-auto rounded-xl border border-zinc-700 bg-[#151515] p-5 text-zinc-50 backdrop:bg-black/75 sm:p-6" onCancel={(event) => {event.preventDefault();if (!saveLock.current) close();}}>
+			{dialog && <dialog ref={modal} aria-labelledby="reading-dialog-title" className="[color-scheme:dark] m-auto max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-[60rem] overflow-y-auto rounded-xl border border-zinc-700 bg-[#151515] p-5 text-zinc-50 backdrop:bg-black/75 sm:p-6" onCancel={(event) => {event.preventDefault();if (!saveLock.current) close();}}>
 				<header className="mb-4 flex items-start justify-between gap-3">
 					<h2 id="reading-dialog-title" className="break-all text-xl font-bold">{dialog.kind === "detail" ? dialog.record?.title : dialog.kind === "delete" ? "독서 기록 삭제" : dialog.kind === "create" ? "독서 기록 등록" : "독서 기록 수정"}</h2>
 					<button type="button" disabled={saving} onClick={close} className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-300 hover:bg-zinc-800">닫기</button>
@@ -270,6 +332,10 @@ export default function ReadingPage() {
 				{!detailLoading && (dialog.kind === "create" || ((dialog.kind === "edit" || dialog.kind === "detail") && detailReady)) && (
 					<form onSubmit={save}>
 						<fieldset disabled={saving || detailLoading} className="space-y-4">
+							<label className="block max-w-40 space-y-1 text-sm font-medium">
+								<span>독서 회차</span>
+								<input type="number" required={dialog.kind !== "detail"} className={INPUT} min={1} max={MAX_ROUND} step={1} readOnly={dialog.kind === "detail"} value={form.readingRound} onChange={(event) => update("readingRound", event.target.value)} />
+							</label>
 							{([["title", "제목", true], ["author", "지은이", true], ["translator", "옮긴이", false]] as const).map(([field, label, required]) => (
 								<label key={field} className="block space-y-1 text-sm font-medium">
 									<span>{label}{required && dialog.kind !== "detail" ? " (필수)" : ""}</span>
@@ -291,12 +357,9 @@ export default function ReadingPage() {
 								<textarea readOnly={dialog.kind === "detail"} className={INPUT} rows={3} maxLength={200} aria-describedby="reading-content-length" value={form.content} onChange={(event) => update("content", event.target.value)} />
 								<span id="reading-content-length" className="block text-right text-xs text-zinc-400">{form.content.length} / 200</span>
 							</label>
-							<label className="block space-y-1 text-sm font-medium">
-								<span>평점 (5점 만점)</span>
-								<select disabled={dialog.kind === "detail"} className={INPUT} value={form.rating} onChange={(event) => update("rating", event.target.value)}>
-									<option value="">평점 없음</option>
-									{SCORES.map((score) => <option key={score} value={score}>{score}점</option>)}
-								</select>
+							<ReadingRating value={form.rating} readOnly={dialog.kind === "detail"} onChange={(value) => update("rating", value)} />
+							<label className="flex items-center gap-2 text-sm font-medium has-[:enabled]:cursor-pointer">
+								<input type="checkbox" disabled={dialog.kind === "detail"} checked={form.reread} onChange={(event) => update("reread", event.target.checked)} /> 다시 읽을 책
 							</label>
 							<label className="block space-y-1 text-sm font-medium">
 								<span>비고 (소감)</span>

@@ -1,0 +1,18 @@
+.shell {
+	width: 100%;
+	height: clamp(20rem, 55vh, 38rem);
+	--ag-background-color: #111111;
+	--ag-foreground-color: #f4f4f5;
+	--ag-header-background-color: #09090b;
+	--ag-header-foreground-color: #d4d4d8;
+	--ag-row-hover-color: #18181b;
+	--ag-border-color: #27272a;
+	--ag-row-border-color: #27272a;
+	--ag-column-border: solid 1px #27272a;
+	--ag-wrapper-border-radius: 0;
+	--ag-font-size: 0.84rem;
+}
+
+.centerHeader :global(.ag-header-cell-label) {
+	justify-content: center;
+}

@@ -27,3 +27,8 @@
 - `src/components/notice/KkugitNoticePage.tsx`에서 문서 표시와 조회 상태 처리를 공유하고 `src/services/boardApiService.ts`로 조회한다.
 - `/api/resume/notice/kkugit/privacy`는 `KKUGIT_PRIVACY`, `/api/resume/notice/kkugit/terms`는 `KKUGIT_TERMS`로 조회한다.
 - 실제 조회는 `spring-back-end`의 공용 게시판 서비스·매퍼를 사용하며 삭제되지 않은 공개 글 중 게시글 번호가 가장 큰 한 건을 반환한다.
+
+### 6) 재사용 가능한 검색 결과 그리드
+- `src/components/common/DarkDataGrid.tsx`는 AG Grid Community 모듈과 Quartz Dark 테마, 공통 헤더 정렬·행 높이·기본 열 옵션을 제공합니다.
+- 화면에서는 `rowData`, `columnDefs`, `getRowId`와 필요한 이벤트·표시 옵션을 전달합니다. 화면별 열, API 호출, 등록·수정 팝업은 그리드에 넣지 않습니다.
+- `/work/reading`은 이 그리드를 사용하며, 기존 전역 AG Grid CSS 로딩은 그대로 유지합니다.
