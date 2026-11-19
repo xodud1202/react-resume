@@ -8,6 +8,11 @@ interface LandingMenuButton {
 }
 
 const LANDING_MENU_BUTTON_LIST: LandingMenuButton[] = [
+	{
+		label: "독서 기록",
+		href: "/work/reading",
+		description: "독서 기록 화면으로 이동합니다.",
+	},
 	// 메인 메뉴 최상단에서 일일 뉴스 요약 화면으로 바로 이동합니다.
 	{
 		label: "요약 뉴스",
