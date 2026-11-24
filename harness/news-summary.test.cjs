@@ -68,49 +68,65 @@ test("reader uses tighter justified text without stretching final lines", () => 
   assert.match(css, /text-align: justify/);
   assert.match(css, /text-align-last: start/);
   assert.match(css, /line-height: 1.65/);
-  assert.match(css, /min-height: 48px/);
+  assert.match(css, /\.headerCompact \.dayButton [^}]*min-height: 44px/);
 });
 
-const scrollRead = loadUtility("newsSummaryReadScroll").getNewsSummaryScrollReadOrders;
+const scrollPlan = loadUtility("newsSummaryReadScroll").getNewsSummaryScrollReadOrders;
+const scrollRead = (...args) => scrollPlan(...args).headerOrders;
 const position = (dispOrd, top, bottom) => ({ dispOrd, rect: { top, bottom } });
 const farLast = position(9, 2000, 2300);
 
 test("initial paint and horizontal-only scroll never mark articles read", () => {
-  assert.deepEqual(scrollRead([position(1, -5, 100), position(2, 700, 900)], 0, 0, 800), []);
+  assert.deepEqual(scrollRead([position(1, -5, 100), position(2, 700, 900)], 0, 0, 800, 70), []);
 });
 
-test("viewport top must enter a card, not merely show its bottom", () => {
-  assert.deepEqual(scrollRead([position(1, 10, 300), farLast], 0, 10, 800), []);
-  assert.deepEqual(scrollRead([position(1, 0, 300), farLast], 10, 20, 800), [1]);
-  assert.deepEqual(scrollRead([position(1, -100, 0), farLast], 20, 30, 800), []);
+test("sticky header bottom must enter the card, not just the viewport", () => {
+  assert.deepEqual(scrollRead([position(1, 71, 300), farLast], 0, 10, 800, 70), []);
+  assert.deepEqual(scrollRead([position(1, 70, 300), farLast], 10, 20, 800, 70), [1]);
+  assert.deepEqual(scrollRead([position(1, -100, 70), farLast], 20, 30, 800, 70), []);
 });
 
-test("gaps and cards already above the viewport are not read", () => {
-  assert.deepEqual(scrollRead([position(1, -300, -10), position(2, 10, 300), farLast], 0, 100, 800), []);
+test("gaps and cards wholly behind the header are not read", () => {
+  assert.deepEqual(scrollRead([position(1, -300, 69), position(2, 71, 300), farLast], 0, 100, 800, 70), []);
 });
 
-test("middle jumps only read the card containing viewport top", () => {
-  assert.deepEqual(scrollRead([position(1, -600, -400), position(2, -350, -100), position(3, -20, 300), farLast], 0, 600, 800), [3]);
+test("middle jumps only read the card containing the sticky header bottom", () => {
+  assert.deepEqual(scrollRead([position(1, -600, -400), position(2, -350, -100), position(3, 60, 300), farLast], 0, 600, 800, 70), [3]);
 });
 
-test("upward vertical scrolling also reads the card at the viewport top", () => {
-  assert.deepEqual(scrollRead([position(1, -100, 100), farLast], 500, 400, 800), [1]);
+test("upward vertical scrolling also reads the card at the sticky header bottom", () => {
+  assert.deepEqual(scrollRead([position(1, -100, 100), farLast], 500, 400, 800, 70), [1]);
 });
 
-test("viewport bottom entering the last card marks this summary read", () => {
-  assert.deepEqual(scrollRead([position(2, -100, 100), position(7, 801, 1100)], 0, 10, 800), [2]);
-  assert.deepEqual(scrollRead([position(2, -100, 100), position(7, 800, 1100)], 10, 11, 800), [2, 7]);
+test("viewport bottom entering the last card is a separate completion candidate", () => {
+  assert.deepEqual(scrollRead([position(2, -100, 100), position(7, 801, 1100)], 0, 10, 800, 70), [2]);
+  assert.deepEqual(scrollPlan([position(2, -100, 100), position(7, 800, 1100)], 10, 11, 800, 70), { headerOrders: [2], lastOrderAtBottom: 7 });
+});
+
+test("a last card already at viewport bottom waits for actual header contact", () => {
+  const last = position(7, 249, 1050);
+  assert.deepEqual(scrollRead([last], 0, 1, 800, 70), []);
+  assert.deepEqual(scrollRead([position(7, 71, 872)], 1, 179, 800, 70), []);
+  assert.deepEqual(scrollRead([position(7, 70, 871)], 179, 180, 800, 70), [7]);
+  assert.deepEqual(scrollRead([position(1, 300, 400), position(7, 600, 900)], 1200, 1100, 800, 70), []);
 });
 
 test("a fast downward jump across the final card still completes", () => {
-  assert.deepEqual(scrollRead([position(1, -1400, -1000), position(3, 100, 400)], 0, 1200, 800), [1, 3]);
-  assert.deepEqual(scrollRead([position(1, -1500, -1100), position(3, -200, 0)], 1200, 1300, 800), []);
+  assert.deepEqual(scrollPlan([position(1, -1400, -1000), position(3, 100, 400)], 0, 1200, 800, 70), { headerOrders: [], lastOrderAtBottom: 3 });
+  assert.deepEqual(scrollRead([position(1, -1500, -1100), position(3, -200, 0)], 1200, 1300, 800, 70), []);
+});
+
+test("missing or offscreen header skips individual reads but not final completion", () => {
+  assert.deepEqual(scrollRead([position(1, -100, 300), farLast], 0, 10, 800, undefined), []);
+  assert.deepEqual(scrollRead([position(1, -100, 300), farLast], 0, 10, 800, -10), []);
+  assert.deepEqual(scrollRead([position(1, 20, 1000), farLast], 0, 10, 800, 800), []);
+  assert.deepEqual(scrollPlan([position(1, 20, 700), position(9, 800, 1000)], 0, 10, 800, undefined), { headerOrders: [], lastOrderAtBottom: 9 });
 });
 
 test("the final item is determined by display order, not the largest key or a missing ref", () => {
-  assert.deepEqual(scrollRead([position(9, 700, 900), { dispOrd: 1 }], 0, 100, 800), []);
-  assert.deepEqual(scrollRead([position(9, -20, 100), position(1, 800, 1000)], 0, 100, 800), [9, 1]);
-  assert.deepEqual(scrollRead([], 0, 100, 800), []);
+  assert.deepEqual(scrollRead([position(9, 700, 900), { dispOrd: 1 }], 0, 100, 800, 70), []);
+  assert.deepEqual(scrollPlan([position(9, -20, 100), position(1, 800, 1000)], 0, 100, 800, 70), { headerOrders: [9], lastOrderAtBottom: 1 });
+  assert.deepEqual(scrollRead([], 0, 100, 800, 70), []);
 });
 
 /** 실제 hook을 작은 React/브라우저 대역으로 실행해 저장과 정리까지 검사합니다. */
@@ -143,13 +159,15 @@ function mountReadHook(summary, initialStorage = "{}", scrollY = 0) {
   loaded.require = (name) => {
     if (name === "react") return react;
     if (name === "@/utils/newsSummaryStorage") return storage;
-    if (name === "@/utils/newsSummaryReadScroll") return { getNewsSummaryScrollReadOrders: scrollRead };
+    if (name === "@/utils/newsSummaryReadScroll") return { getNewsSummaryScrollReadOrders: scrollPlan };
     throw new Error("Unexpected hook import: " + name);
   };
   loaded._compile(compiled.outputText, sourcePath);
   const result = loaded.exports.default(summary);
   const cleanup = effects.map((effect) => effect());
+  result.headerRef.current = { getBoundingClientRect: () => ({ bottom: 70 }) };
   return {
+    header: result.headerRef,
     refs: result.articleRefs.current,
     get history() { return history; },
     get writes() { return writes; },
@@ -180,6 +198,21 @@ test("hook restores and merges persisted reads without writing on mount or repea
   } finally { mounted.dispose(); }
 });
 
+test("hook measures the actual header bottom every scroll frame", () => {
+  const mounted = mountReadHook(sampleSummary);
+  let bottom = 70;
+  try {
+    mounted.header.current.getBoundingClientRect = () => ({ bottom });
+    mounted.refs.set(1, { getBoundingClientRect: () => ({ top: 110, bottom: 190 }) });
+    mounted.refs.set(2, { getBoundingClientRect: () => ({ top: 2000, bottom: 2500 }) });
+    mounted.scroll(10); mounted.flush();
+    assert.equal(mounted.writes, 0);
+    bottom = 110;
+    mounted.scroll(11); mounted.flush();
+    assert.deepEqual(mounted.history["20261123:2"], [1]);
+  } finally { mounted.dispose(); }
+});
+
 test("restored position waits for actual vertical scroll and new sequence remains separate", () => {
   const mounted = mountReadHook(sampleSummary, JSON.stringify({ "20261123:1": [1, 2] }), 600);
   try {
@@ -191,6 +224,21 @@ test("restored position waits for actual vertical scroll and new sequence remain
     assert.deepEqual(mounted.history["20261123:2"], [1]);
     assert.deepEqual(mounted.history["20261123:1"], [1, 2]);
   } finally { mounted.dispose(); }
+});
+
+test("last-card entry never sweeps untouched predecessors, but completes with all predecessors read", () => {
+  const summary = { ...sampleSummary, articles: [1, 2, 3].map((dispOrd) => ({ dispOrd })) };
+  for (const [persisted, expected] of [[[1], [1]], [[1, 2], [1, 2, 3]]]) {
+    const mounted = mountReadHook(summary, JSON.stringify({ "20261123:2": persisted }));
+    try {
+      mounted.refs.set(1, { getBoundingClientRect: () => ({ top: 90, bottom: 200 }) });
+      mounted.refs.set(2, { getBoundingClientRect: () => ({ top: 212, bottom: 410 }) });
+      mounted.refs.set(3, { getBoundingClientRect: () => ({ top: 800, bottom: 1000 }) });
+      mounted.scroll(1); mounted.flush();
+      assert.deepEqual(mounted.history["20261123:2"], expected);
+      assert.equal(mounted.writes, persisted.length === 2 ? 1 : 0);
+    } finally { mounted.dispose(); }
+  }
 });
 
 test("hook removes listeners and cancels queued work on summary change or unmount", () => {

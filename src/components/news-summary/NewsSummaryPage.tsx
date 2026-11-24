@@ -24,7 +24,7 @@ export default function NewsSummaryPage() {
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
   const dateRailRef = useRef<HTMLElement>(null);
-  const { articleRefs, readOrders, history } = useNewsSummaryRead(summary);
+  const { headerRef, articleRefs, readOrders, history } = useNewsSummaryRead(summary);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -101,7 +101,7 @@ export default function NewsSummaryPage() {
   return (
     <div className={styles.page}>
       <main className={styles.reader}>
-        <header className={`${styles.stickyHeader} ${styles.headerCompact}`} data-compact="true">
+        <header ref={headerRef} className={`${styles.stickyHeader} ${styles.headerCompact}`} data-compact="true">
           <div className={styles.brandRow}>
             <div className={styles.brand}>
               <span className={styles.brandIcon} aria-hidden="true">

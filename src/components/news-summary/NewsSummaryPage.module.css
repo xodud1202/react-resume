@@ -88,20 +88,22 @@
 
 
 /* Compact reading controls keep a usable touch target and leave more room for cards. */
-.headerCompact { padding-top: max(10px, env(safe-area-inset-top)); }
-.headerCompact .brandRow { margin-bottom: 10px; }
-.headerCompact .brandIcon { width: 30px; height: 32px; border-radius: 10px 10px 10px 3px; }
-.headerCompact .brandIcon svg { width: 20px; height: 20px; }
-.headerCompact .brand h1 { font-size: 18px; }
+.headerCompact { padding-top: max(6px, env(safe-area-inset-top)); }
+.headerCompact .brandRow { margin-bottom: 4px; }
+.headerCompact .brand { gap: 8px; }
+.headerCompact .brandIcon { width: 24px; height: 26px; border-radius: 8px 8px 8px 3px; }
+.headerCompact .brandIcon svg { width: 16px; height: 16px; }
+.headerCompact .brand h1 { font-size: 16px; }
 .headerCompact .brand p { display: none; }
-.headerCompact .edition { padding: 4px 8px; font-size: 10px; }
-.headerCompact .dateRail { gap: 7px; padding-bottom: 12px; }
-.headerCompact .dayButton { flex-basis: 52px; min-height: 48px; gap: 2px; border-radius: 11px; }
+.headerCompact .edition { padding: 3px 7px; font-size: 10px; }
+.headerCompact .dateRail { gap: 6px; padding-bottom: 4px; }
+.headerCompact .dayButton { flex-basis: 52px; min-height: 44px; gap: 2px; border-radius: 11px; }
 .headerCompact .dayLabel { font-size: 12px; }
 .headerCompact .dateLabel { font-size: 10px; }
 .headerCompact .dayDot { width: 3px; height: 3px; }
-.headerCompact .progressHeading { padding-bottom: 8px; font-size: 11px; }
-.headerCompact .weekPlaceholder { height: 48px; }
+.headerCompact .progressHeading { padding-bottom: 3px; font-size: 11px; line-height: 14px; }
+.headerCompact .progressComplete svg { height: 12px; width: 12px; }
+.headerCompact .weekPlaceholder { height: 44px; }
 
 @media (prefers-reduced-motion: reduce) {
   .article, .dayButton, .progressTrack > span { transition: none; }
