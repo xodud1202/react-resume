@@ -33,30 +33,53 @@ export default function useNewsSummaryRead(summary: NewsSummary | null) {
     const articles = summary.articles;
     let previousScrollY = window.scrollY;
     let frame = 0;
+    let lastCardEntered = false;
 
     /** 실제 세로 스크롤에서 고정 헤더 아래에 닿은 기사와 마지막 기사 진입을 확인합니다. */
     function updateReadArticles() {
       frame = 0;
       const currentScrollY = window.scrollY;
+      const positions = articles.map((article) => ({
+        dispOrd: article.dispOrd,
+        rect: articleRefs.current.get(article.dispOrd)?.getBoundingClientRect(),
+      }));
+      const viewportHeight = window.innerHeight;
+      const readLine = headerRef.current?.getBoundingClientRect().bottom;
       const { headerOrders, lastOrderAtBottom } = getNewsSummaryScrollReadOrders(
-        articles.map((article) => {
-          const rect = articleRefs.current.get(article.dispOrd)?.getBoundingClientRect();
-          return { dispOrd: article.dispOrd, rect };
-        }),
-        previousScrollY,
-        currentScrollY,
-        window.innerHeight,
-        headerRef.current?.getBoundingClientRect().bottom,
+        positions, previousScrollY, currentScrollY, viewportHeight, readLine,
       );
+      const movedDown = currentScrollY > previousScrollY;
       previousScrollY = currentScrollY;
-      if (!headerOrders.length && lastOrderAtBottom === undefined) return;
+
+      // The last card can enter before the preceding card reaches the header.
+      // Keep that entry until the last card leaves the reading area.
+      const last = positions[positions.length - 1];
+      const lastVisible = last.rect && last.rect.top <= viewportHeight
+        && last.rect.bottom > (readLine ?? 0);
+      lastCardEntered = Boolean(lastVisible && (lastCardEntered || lastOrderAtBottom !== undefined));
+      const completeLast = movedDown && lastCardEntered;
+
+      // At the true scroll limit some final cards can never reach the header.
+      // Complete only the visible tail, not cards skipped above the viewport.
+      const scroller = document.scrollingElement;
+      const maxScrollY = scroller ? scroller.scrollHeight - scroller.clientHeight : 0;
+      const tailOrders: number[] = [];
+      if (movedDown && lastVisible && maxScrollY > 1 && currentScrollY >= maxScrollY - 1) {
+        for (let i = positions.length - 1; i >= 0; i -= 1) {
+          const { rect, dispOrd } = positions[i];
+          if (!rect || rect.bottom <= (readLine ?? 0) || rect.top >= viewportHeight) break;
+          tailOrders.push(dispOrd);
+        }
+        tailOrders.reverse();
+      }
+
+      if (!headerOrders.length && !completeLast && !tailOrders.length) return;
       setHistory((current) => {
         // 다른 탭의 기록도 병합해 날짜 전환이나 동시 열람 시 기존 읽음이 사라지지 않게 합니다.
         const stored = loadNewsSummaryReadHistory();
-        const read = new Set([...(stored[key] || []), ...(current[key] || []), ...headerOrders]);
-        // 하단 진입은 앞 기사를 이미 모두 읽은 경우에만 마지막 기사 하나를 완료합니다.
-        if (lastOrderAtBottom !== undefined && articles.every(({ dispOrd }) => dispOrd === lastOrderAtBottom || read.has(dispOrd))) {
-          read.add(lastOrderAtBottom);
+        const read = new Set([...(stored[key] || []), ...(current[key] || []), ...headerOrders, ...tailOrders]);
+        if (completeLast && articles.every(({ dispOrd }) => dispOrd === last.dispOrd || read.has(dispOrd))) {
+          read.add(last.dispOrd);
         }
         if (read.size === (current[key] || []).length) return current;
         const next = { ...stored, ...current, [key]: [...read] };

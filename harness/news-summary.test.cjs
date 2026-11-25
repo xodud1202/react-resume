@@ -146,6 +146,7 @@ function mountReadHook(summary, initialStorage = "{}", scrollY = 0) {
     requestAnimationFrame: (callback) => { const id = nextFrame++; frames.set(id, callback); return id; },
     cancelAnimationFrame: (id) => frames.delete(id),
   };
+  global.document = { scrollingElement: { scrollHeight: 4800, clientHeight: 800 } };
   const react = {
     useState: (initial) => { history = initial; return [history, (update) => { history = typeof update === "function" ? update(history) : update; }]; },
     useRef: (current) => ({ current }),
@@ -174,7 +175,7 @@ function mountReadHook(summary, initialStorage = "{}", scrollY = 0) {
     get pending() { return frames.size; },
     scroll: (y) => { window.scrollY = y; listeners.get("scroll")?.(); },
     flush: () => { const callbacks = [...frames.values()]; frames.clear(); callbacks.forEach((callback) => callback()); },
-    dispose: () => { cleanup.forEach((fn) => fn?.()); delete global.window; },
+    dispose: () => { cleanup.forEach((fn) => fn?.()); delete global.window; delete global.document; },
     listeners,
   };
 }
@@ -239,6 +240,37 @@ test("last-card entry never sweeps untouched predecessors, but completes with al
       assert.equal(mounted.writes, persisted.length === 2 ? 1 : 0);
     } finally { mounted.dispose(); }
   }
+});
+
+test("remembers entry when the previous card reaches the header on a later frame", () => {
+  const mounted = mountReadHook(sampleSummary);
+  let first = { top: 76, bottom: 750 };
+  let last = { top: 800, bottom: 1050 };
+  try {
+    mounted.refs.set(1, { getBoundingClientRect: () => first });
+    mounted.refs.set(2, { getBoundingClientRect: () => last });
+    mounted.scroll(10); mounted.flush();
+    assert.equal(mounted.writes, 0);
+    first = { top: 70, bottom: 744 };
+    last = { top: 794, bottom: 1044 };
+    mounted.scroll(16); mounted.flush();
+    assert.deepEqual(mounted.history["20261123:2"], [1, 2]);
+  } finally { mounted.dispose(); }
+});
+
+test("only the visible tail completes at the scroll limit, even if it cannot touch the header", () => {
+  const summary = { ...sampleSummary, articles: [1, 2, 3, 4].map((dispOrd) => ({ dispOrd })) };
+  const mounted = mountReadHook(summary, JSON.stringify({ "20261123:2": [1] }));
+  try {
+    mounted.refs.set(2, { getBoundingClientRect: () => ({ top: -130, bottom: 65 }) });
+    mounted.refs.set(3, { getBoundingClientRect: () => ({ top: 200, bottom: 390 }) });
+    mounted.refs.set(4, { getBoundingClientRect: () => ({ top: 410, bottom: 600 }) });
+    mounted.scroll(3900); mounted.flush();
+    assert.deepEqual(mounted.history["20261123:2"], [1]);
+    mounted.scroll(4000); mounted.flush();
+    assert.deepEqual(mounted.history["20261123:2"], [1, 3, 4]);
+    assert.equal(mounted.writes, 1);
+  } finally { mounted.dispose(); }
 });
 
 test("hook removes listeners and cancels queued work on summary change or unmount", () => {

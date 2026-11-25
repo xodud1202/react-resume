@@ -188,7 +188,7 @@ export default function NewsSummaryPage() {
               <footer className={`${styles.endMessage} ${complete ? styles.endComplete : ""}`} aria-live="polite">
                 <span className={styles.endIcon}><CheckIcon /></span>
                 <h2>{complete ? "오늘의 소식, 모두 읽었어요" : "이날의 소식은 여기까지예요"}</h2>
-                <p>{complete ? "하루를 이해하는 작은 습관, 내일 또 만나요." : "끝까지 내리면 모든 뉴스가 읽음으로 표시돼요."}</p>
+                <p>{complete ? "하루를 이해하는 작은 습관, 내일 또 만나요." : "끝까지 내리면 화면에 남은 마지막 뉴스가 읽음으로 표시돼요."}</p>
               </footer>
             </>
           )}
